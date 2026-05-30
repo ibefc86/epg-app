@@ -233,7 +233,7 @@ function groupUpcoming(channels, favSports) {
           sport: prog.sport,
           isLive: false,
           pct: 0,
-          startRaw: prog.startRaw,
+          startRaw: prog.espnStartTime || prog.startRaw,
           desc: prog.desc,
           channels: []
         };
