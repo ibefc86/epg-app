@@ -185,8 +185,8 @@ function matchFixture(title) {
     }
 
     if (fix.home && fix.away) {
-      const homeWords = fix.home.split(' ').filter(w => w.length >= 4);
-      const awayWords = fix.away.split(' ').filter(w => w.length >= 4);
+      const homeWords = fix.home.split(' ').filter(w => w.length >= 5);
+      const awayWords = fix.away.split(' ').filter(w => w.length >= 5);
       if (homeWords.length && awayWords.length) {
         if (homeWords.some(w => t.includes(w)) && awayWords.some(w => t.includes(w))) return fix;
       }
