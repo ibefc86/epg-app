@@ -349,7 +349,7 @@ function filtered() {
   const q = (document.getElementById('search')?.value||'').toLowerCase();
   return channels.filter(ch => {
     if (tab==='my') return ch.now?.sport && favSports.includes(ch.now.sport.sportId);
-    if (tab==='all-live') return ch.now?.sport || ch.now?.isLive;
+    if (tab==='all-live') return ch.now?.sport && ch.now.sport.sportId !== 'live';
     if (q) {
       const nm=(ch.name||'').toLowerCase().includes(q);
       const np=((ch.now||{}).title||'').toLowerCase().includes(q);
