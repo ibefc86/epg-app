@@ -295,9 +295,16 @@ const upcoming = progs.filter(p => p.start > now && p.start < in24h);
       next: next.filter(p => !isNonLive(p.title)).map(p => ({
           title: p.title, desc: p.desc.slice(0, 100), startRaw: p.startRaw
         })),
-        upcoming: upcoming.filter(p => !isNonLive(p.title)).map(p => ({
-          title: p.title, desc: p.desc.slice(0, 100), startRaw: p.startRaw
-        }))
+        upcoming: upcoming.filter(p => !isNonLive(p.title)).map(p => {
+          const upcomingClassified = classifyProgramme(p.title);
+          if (!upcomingClassified) return null;
+          return {
+            title: p.title, desc: p.desc.slice(0, 100), startRaw: p.startRaw,
+            sport: upcomingClassified,
+            fixtureKey: upcomingClassified.fixtureKey,
+            displayName: upcomingClassified.displayName
+          };
+        }).filter(Boolean)
       };
     });
 
