@@ -273,7 +273,7 @@ function render() {
     if (!ch.now && !(ch.next||[]).length) {
       ph = `<div class="programme"><div class="prog-time">—</div><div class="prog-title" style="color:#444">No schedule data</div></div>`;
     }
-    return `<div class="channel-card"><div class="channel-header">${logo}<div><div class="channel-name">${ch.name}</div><div class="channel-meta">${ch.lang||''}</div></div></div>${ph}</div>`;
+    return `<div class="channel-card"><div class="channel-header">${logo}<div><div class="channel-name">${ch.displayName || ch.name}${ch.quality ? ` <span style="font-size:10px;color:#555;font-weight:400">${ch.quality}</span>` : ''}${ch.variants > 1 ? ` <span style="font-size:10px;color:#444;font-weight:400">${ch.variants} streams</span>` : ''}</div><div class="channel-meta">${ch.lang||''}</div></div></div>${ph}</div>`;
   }).join('');
 
   const old = document.getElementById('load-more');
