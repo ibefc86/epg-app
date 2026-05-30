@@ -329,8 +329,8 @@ const upcoming = progs.filter(p => p.start > now && p.start < in24h);
           desc: nowP.desc.slice(0, 150),
           startRaw: nowP.startRaw,
           pct: Math.min(100, Math.round(((now - nowP.start) / (nowP.stop - nowP.start)) * 100)),
-          sport: classified ? { ...classified, isLive: true } : null,
-          isLive: classified ? true : false,
+          sport: classified,
+          isLive: classified?.isLive || false,
         } : null,
       next: next.filter(p => !isNonLive(p.title)).map(p => ({
           title: p.title, desc: p.desc.slice(0, 100), startRaw: p.startRaw
