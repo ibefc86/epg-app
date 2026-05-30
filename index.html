@@ -103,6 +103,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #
 <div class="tabs" id="tabs" style="display:none">
   <button class="tab active" onclick="setTab(this,'my')">Favorites</button>
   <button class="tab" onclick="setTab(this,'live')">Live Now</button>
+  <button class="tab" onclick="setTab(this,'upcoming')">Upcoming</button>
   <button class="tab" onclick="setTab(this,'all')">All Channels</button>
 </div>
 
@@ -195,7 +196,51 @@ function normaliseTitle(title) {
     .replace(/\s*[\u02B0-\u02FF\u1D00-\u1DBF]+\s*$/, '')
     .trim();
 }
+function classifyUpcoming(prog) {
+  if (!prog || isNonLiveClient(prog.title)) return null;
+  const t = prog.title.toLowerCase();
+  for (const sport of SPORTS) {
+    if (t.includes(sport.name.toLowerCase())) return { sportId: sport.id, emoji: sport.emoji };
+  }
+  return null;
+}
 
+function isNonLiveClient(title) {
+  if (!title) return true;
+  const t = title.toLowerCase();
+  const NON_LIVE = ['highlights','replay','classic','documentary','news','magazine','preview','analysis','best of','greatest','history of','end of transmission','test card','review','the loop','extended','wrap','teleshopping'];
+  return NON_LIVE.some(w => t.includes(w));
+}
+
+function groupUpcoming(channels, favSports) {
+  const groups = {};
+  for (const ch of channels) {
+    for (const prog of (ch.upcoming || [])) {
+      const sport = classifyUpcoming(prog);
+      if (!sport) continue;
+      if (favSports.length && !favSports.includes(sport.sportId)) continue;
+      const key = normaliseTitle(prog.title).toLowerCase();
+      if (!groups[key]) {
+        groups[key] = {
+          title: normaliseTitle(prog.title),
+          sport: sport,
+          isLive: false,
+          pct: 0,
+          startRaw: prog.startRaw,
+          desc: prog.desc,
+          channels: []
+        };
+      }
+      if (!groups[key].channels.find(c => c.id === ch.id)) {
+        groups[key].channels.push(ch);
+      }
+      if (!groups[key].startRaw || prog.startRaw < groups[key].startRaw) {
+        groups[key].startRaw = prog.startRaw;
+      }
+    }
+  }
+  return Object.values(groups).sort((a,b) => a.startRaw > b.startRaw ? 1 : -1);
+}
 function groupByMatch(filteredChannels) {
   const groups = {};
   for (const ch of filteredChannels) {
@@ -277,7 +322,7 @@ function filtered() {
   return channels.filter(ch => {
     if (tab==='my') return ch.now && ch.now.sport && favSports.includes(ch.now.sport.sportId);
     if (tab==='live') return ch.now && ch.now.isLive;
-    if (tab==='now') return ch.now;
+    if (tab==='upcoming') return (ch.upcoming||[]).some(p => classifyUpcoming(p));
     if (q) {
       const nm=(ch.name||'').toLowerCase().includes(q);
       const np=((ch.now||{}).title||'').toLowerCase().includes(q);
@@ -302,7 +347,7 @@ function render() {
   }
   if (!list.length) { el.innerHTML='<div class="status-msg">No channels match.</div>'; return; }
 
-  if (tab === 'my' || tab === 'live') {
+  if (tab === 'my' || tab === 'live' || tab === 'upcoming') {
     const groups = groupByMatch(list);
     const liveGroups = groups.filter(g => g.isLive);
     const otherGroups = groups.filter(g => !g.isLive);
@@ -313,6 +358,9 @@ function render() {
     }
     if (otherGroups.length && tab === 'my') {
       html += `<div class="section-label other">On now</div>`;
+      html += otherGroups.map(renderMatchCard).join('');
+    }
+    if (tab === 'upcoming' && otherGroups.length) {
       html += otherGroups.map(renderMatchCard).join('');
     }
     el.innerHTML = html;
