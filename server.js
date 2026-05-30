@@ -52,7 +52,7 @@ function parseDate(s) {
   if (!s) return null;
   s = s.toString().trim();
   const utc = new Date(Date.UTC(+s.slice(0,4),+s.slice(4,6)-1,+s.slice(6,8),+s.slice(8,10),+s.slice(10,12),0));
-  const off = s.slice(12).trim();
+  const off = s.slice(14).trim();
   if (off.length >= 3) {
     const sign = off[0]==='-'?-1:1;
     utc.setMinutes(utc.getMinutes() - sign*(+off.slice(1,3)*60+(+off.slice(3,5)||0)));
