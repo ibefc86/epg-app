@@ -237,6 +237,10 @@ function keywordSport(title) {
       return { sportId: id, emoji: EMOJI[id] || '🏟️', isLive: false, fixtureKey: null, displayName: null };
     }
   }
+  // Detect superscript live characters used by EPG providers
+  if (/[\u1D00-\u1DBF\u02B0-\u02FF]/.test(title)) {
+    return { sportId: 'live', emoji: '🏟️', isLive: true, fixtureKey: null, displayName: null };
+  }
   return null;
 }
 
@@ -253,6 +257,15 @@ function classifyProgramme(title) {
   const kw = keywordSport(title);
   if (kw) return kw;
   return null;
+}
+
+async function refreshFixtures() {
+  try {
+    await fetchESPNFixtures();
+  } catch(e) {
+    console.error('Fixture refresh failed:', e.message);
+  }
+  setTimeout(refreshFixtures, 60 * 1000);
 }
 
 async function refresh() {
@@ -367,4 +380,5 @@ app.get('/status', (req, res) => {
 app.listen(PORT, () => {
   console.log('EPG server running on port ' + PORT);
   refresh();
+  setTimeout(refreshFixtures, 60 * 1000);
 });
