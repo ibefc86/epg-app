@@ -136,11 +136,11 @@ async function fetchESPNFixtures() {
         homeShort: homeShort.toLowerCase(),
         awayShort: awayShort.toLowerCase(),
         // Clean display name for the grouped card title
-        displayName: `${home} v ${away}`,
+        displayName: (home && away) ? `${home} v ${away}` : (event.name || ''),
         isLive: state === 'in',
         isUpcoming: state === 'pre',
         isFinished: state === 'post',
-        fixtureKey: `${home.toLowerCase()}__${away.toLowerCase()}`,
+        fixtureKey: (home && away) ? `${home.toLowerCase()}__${away.toLowerCase()}` : `event__${event.id}`,
       });
     }
   }
