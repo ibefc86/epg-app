@@ -173,6 +173,10 @@ function matchFixture(title) {
 
   for (const fix of fixtureCache) {
     if (fix.name && fix.name.length > 5 && t.includes(fix.name.slice(0, 20))) return fix;
+    if (fix.name && fix.name.length > 5) {
+      const fixWords = fix.name.split(' ').filter(w => w.length >= 5);
+      if (fixWords.length >= 2 && fixWords.every(w => t.includes(w))) return fix;
+    }
 
     if (fix.home && fix.away) {
       const homeWords = fix.home.split(' ').filter(w => w.length >= 4);
