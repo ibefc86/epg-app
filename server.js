@@ -196,6 +196,7 @@ function matchFixture(title) {
 const SPORT_KEYWORDS = {
   cricket:     ['cricket','ashes','test match','ipl','indian premier league','big bash','t20','one-day','county cricket','icc','twenty20'],
   rugby_union: ['rugby union','super rugby','six nations','premiership rugby','united rugby'],
+  golf:        ['dp world tour','pga tour','lpga','european tour','austrian open','ryder cup','golf channel'],
   cycling:     ['cycling','tour de france','giro','vuelta'],
   racing:      ['supercars','v8','bathurst','nascar'],
   olympic:     ['olympic','commonwealth games','world championships','athletics'],
@@ -206,7 +207,7 @@ function keywordSport(title) {
   const t = title.toLowerCase();
   for (const [id, kws] of Object.entries(SPORT_KEYWORDS)) {
     if (kws.some(k => t.includes(k))) {
-      const EMOJI = { cricket:'🏏', rugby_union:'🏆', cycling:'🚴', racing:'🏁', olympic:'🏅' };
+      const EMOJI = { cricket:'🏏', rugby_union:'🏆', golf:'⛳', cycling:'🚴', racing:'🏁', olympic:'🏅' };
       return { sportId: id, emoji: EMOJI[id] || '🏟️', isLive: false, fixtureKey: null, displayName: null };
     }
   }
