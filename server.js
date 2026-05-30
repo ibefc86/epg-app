@@ -350,7 +350,8 @@ const upcoming = progs.filter(p => p.start > now && p.start < in24h);
             title: p.title, desc: p.desc.slice(0, 100), startRaw: p.startRaw,
             sport: upcomingClassified,
             fixtureKey: upcomingClassified.fixtureKey,
-            displayName: upcomingClassified.displayName
+            displayName: upcomingClassified.displayName,
+            espnStartTime: fix.espnStartTime || null
           };
         }).filter(Boolean)
       };
