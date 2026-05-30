@@ -21,6 +21,8 @@ const ESPN_LEAGUES = [
   { id: 'soccer_esp',  url: `${ESPN_BASE}/soccer/esp.1/scoreboard`,             emoji: '⚽' },
   { id: 'soccer_ger',  url: `${ESPN_BASE}/soccer/ger.1/scoreboard`,             emoji: '⚽' },
   { id: 'soccer_ita',  url: `${ESPN_BASE}/soccer/ita.1/scoreboard`,             emoji: '⚽' },
+  { id: 'soccer_aus',  url: `${ESPN_BASE}/soccer/aus.1/scoreboard`,             emoji: '⚽' },
+  { id: 'soccer_fra',  url: `${ESPN_BASE}/soccer/fra.1/scoreboard`,             emoji: '⚽' },
   { id: 'tennis_atp',  url: `${ESPN_BASE}/tennis/atp/scoreboard`,               emoji: '🎾' },
   { id: 'tennis_wta',  url: `${ESPN_BASE}/tennis/wta/scoreboard`,               emoji: '🎾' },
   { id: 'golf_pga',    url: `${ESPN_BASE}/golf/pga/scoreboard`,                 emoji: '⛳' },
@@ -33,8 +35,8 @@ const LEAGUE_TO_SPORT = {
   nrl: 'nrl', afl: 'afl', nba: 'nba', nfl: 'nfl', nhl: 'ice_hockey',
   mlb: 'baseball', soccer_epl: 'soccer', soccer_ucl: 'soccer',
   soccer_mls: 'soccer', soccer_esp: 'soccer', soccer_ger: 'soccer',
-  soccer_ita: 'soccer', tennis_atp: 'tennis', tennis_wta: 'tennis',
-  golf_pga: 'golf', mma: 'boxing', f1: 'f1',
+  soccer_ita: 'soccer',soccer_aus: 'soccer', soccer_fra: 'soccer', tennis_atp: 'tennis', tennis_wta: 'tennis',
+  golf_pga: 'golf', golf_eur: 'golf', mma: 'boxing', f1: 'f1',
 };
 
 app.use((req, res, next) => {
