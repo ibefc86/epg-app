@@ -133,7 +133,7 @@ function isNonLive(title) {
 
 function getSportFromProgramme(title, desc) {
   // Match against programme title first (most reliable)
-  const text = ((title || '') + ' ' + (desc || '')).toLowerCase();
+  const text = (title || '').toLowerCase();
   for (const sport of SPORTS) {
     if (sport.keywords.some(k => text.includes(k))) return sport;
   }
