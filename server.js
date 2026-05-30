@@ -175,7 +175,8 @@ function matchFixture(title) {
     if (fix.name && fix.name.length > 5 && t.includes(fix.name.slice(0, 20))) return fix;
     if (fix.name && fix.name.length > 5) {
       const fixWords = fix.name.split(' ').filter(w => w.length >= 5);
-      if (fixWords.length >= 2 && fixWords.every(w => t.includes(w))) return fix;
+      const matches = fixWords.filter(w => t.includes(w));
+      if (fixWords.length >= 2 && matches.length >= 2) return fix;
     }
 
     if (fix.home && fix.away) {
