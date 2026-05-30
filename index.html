@@ -390,7 +390,7 @@ function render() {
   }
 
   if (tab === 'all-live') {
-    const liveGroups = groupByMatch(channels.filter(ch => ch.now?.isLive)).filter(g => g.isLive);
+    const liveGroups = groupByMatch(channels.filter(ch => ch.now?.isLive && ch.now?.sport?.sportId !== 'live')).filter(g => g.isLive);
     const upcomingGroups = groupUpcoming(channels, []);
     let html = '';
     if (liveGroups.length) {
