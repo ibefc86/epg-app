@@ -357,14 +357,16 @@ const upcoming = progs.filter(p => p.start > now && p.start < in24h);
 
     cache = deduplicateChannels(raw);
     console.log(`EPG ready — ${raw.length} → ${cache.length} channels`);
-  } catch(e) {
+ } catch(e) {
     console.error('Refresh failed:', e.message);
+    setTimeout(refresh, 2 * 60 * 1000); // retry in 2 mins on failure
+    return;
   }
   setTimeout(refresh, 30 * 60 * 1000);
 }
 
 app.get('/guide', (req, res) => {
-  if (!cache) return res.status(503).json({ error: 'EPG still loading, try again in 30 seconds' });
+  if (!cache) return res.status(503).json({ error: 'EPG loading, retrying automatically — refresh in 2 minutes' });
   res.json(cache);
 });
 app.get('/fixtures', (req, res) => {
