@@ -175,6 +175,12 @@ function saveSports() {
   render();
 }
 
+function fmtISO(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit',timeZone:'Australia/Sydney'});
+}
+
 function fmt(raw) {
   if (!raw) return '';
   const s = raw.toString().trim();
@@ -233,7 +239,8 @@ function groupUpcoming(channels, favSports) {
           sport: prog.sport,
           isLive: false,
           pct: 0,
-          startRaw: prog.espnStartTime || prog.startRaw,
+          startRaw: prog.startRaw,
+          espnStartTime: prog.espnStartTime || null,
           desc: prog.desc,
           channels: []
         };
@@ -316,7 +323,7 @@ function renderMatchCard(group) {
   return `<div class="match-card${group.isLive?' live-card':''}">
     <div class="match-title">${group.title}</div>
     <div class="match-meta">
-      <span class="match-time">${fmt(group.startRaw)}</span>
+      <span class="match-time">${group.espnStartTime ? fmtISO(group.espnStartTime) : fmt(group.startRaw)}</span>
       ${liveBadge}${sportBadge}
     </div>
     ${group.desc ? `<div class="match-desc">${group.desc}</div>` : ''}
