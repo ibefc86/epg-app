@@ -245,7 +245,7 @@ function keywordSport(title) {
   for (const [id, kws] of Object.entries(SPORT_KEYWORDS)) {
     if (kws.some(k => t.includes(k))) {
       const EMOJI = { cricket:'🏏', rugby_union:'🏆', golf:'⛳', cycling:'🚴', racing:'🏁', olympic:'🏅', tennis:'🎾', boxing:'🥊', nrl:'🏉', afl:'🦘', soccer:'⚽', nba:'🏀', nfl:'🏈', nhl:'🏒', mlb:'⚾' };
-      return { sportId: id, emoji: EMOJI[id] || '🏟️', isLive: true, fixtureKey: null, displayName: null };
+      return { sportId: id, emoji: EMOJI[id] || '🏟️', isLive: false, fixtureKey: null, displayName: null };
     }
   }
   // Detect superscript live characters used by EPG providers
@@ -329,8 +329,8 @@ const upcoming = progs.filter(p => p.start > now && p.start < in24h);
           desc: nowP.desc.slice(0, 150),
           startRaw: nowP.startRaw,
           pct: Math.min(100, Math.round(((now - nowP.start) / (nowP.stop - nowP.start)) * 100)),
-          sport: classified,
-          isLive: classified?.isLive || false,
+          sport: classified ? { ...classified, isLive: true } : null,
+          isLive: classified ? true : false,
         } : null,
       next: next.filter(p => !isNonLive(p.title)).map(p => ({
           title: p.title, desc: p.desc.slice(0, 100), startRaw: p.startRaw
