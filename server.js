@@ -300,7 +300,11 @@ app.get('/guide', (req, res) => {
   res.json(cache);
 });
 
-app.get('/status', (req, res) => {
+app.get('/debug', (req, res) => {
+  if (!cache) return res.status(503).json({ error: 'not ready' });
+  const ch = cache.find(c => c.name.toLowerCase().includes('sky sports golf'));
+  res.json(ch || { error: 'channel not found' });
+});
   res.json({
     ready: !!cache,
     channels: cache ? cache.length : 0,
