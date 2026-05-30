@@ -12,8 +12,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #
 .header p { font-size: 13px; color: #888; margin-top: 2px; }
 .btn-settings { background: #1a1a1a; border: 1px solid #333; border-radius: 8px; color: #aaa; padding: 8px 14px; font-size: 13px; cursor: pointer; }
 .btn-settings:hover { background: #222; }
-
-/* Sport picker overlay */
 .overlay { position: fixed; inset: 0; background: #0f0f0f; z-index: 100; overflow-y: auto; display: none; }
 .overlay.active { display: block; }
 .overlay-header { padding: 1.5rem; border-bottom: 1px solid #222; display: flex; align-items: center; justify-content: space-between; }
@@ -29,8 +27,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #
 .overlay-footer { padding: 1.5rem; border-top: 1px solid #222; position: sticky; bottom: 0; background: #0f0f0f; }
 .btn-save { width: 100%; padding: 14px; background: #3b82f6; border: none; border-radius: 10px; color: #fff; font-size: 16px; font-weight: 600; cursor: pointer; }
 .btn-save:hover { background: #2563eb; }
-
-/* Main content */
 .tabs { display: flex; gap: 8px; padding: 1rem 1.5rem; border-bottom: 1px solid #222; flex-wrap: wrap; }
 .tab { padding: 7px 16px; border-radius: 20px; border: 1px solid #333; background: transparent; color: #aaa; font-size: 13px; cursor: pointer; }
 .tab.active { background: #fff; color: #000; border-color: #fff; font-weight: 500; }
@@ -49,6 +45,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #
 .prog-title { font-size: 13px; color: #ddd; font-weight: 500; }
 .prog-desc { font-size: 12px; color: #555; margin-top: 3px; line-height: 1.4; }
 .badge-now { display: inline-block; background: #16a34a; color: #fff; font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 10px; margin-left: 6px; vertical-align: middle; }
+.badge-live { display: inline-block; background: #dc2626; color: #fff; font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 10px; margin-left: 4px; vertical-align: middle; }
 .badge-sport { display: inline-block; font-size: 10px; padding: 2px 6px; border-radius: 10px; margin-left: 4px; vertical-align: middle; background: #1d4ed8; color: #fff; }
 .progress-wrap { height: 3px; background: #333; border-radius: 2px; margin-top: 6px; }
 .progress-bar { height: 100%; background: #3b82f6; border-radius: 2px; }
@@ -59,7 +56,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #
 .empty-fav h3 { font-size: 18px; font-weight: 500; margin-bottom: 8px; }
 .empty-fav p { font-size: 14px; color: #555; margin-bottom: 1.5rem; }
 .empty-fav button { background: #3b82f6; border: none; border-radius: 10px; color: #fff; padding: 12px 24px; font-size: 14px; font-weight: 500; cursor: pointer; }
-.section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #555; margin: 1rem 0 0.5rem; font-weight: 500; }
 </style>
 </head>
 <body>
@@ -72,7 +68,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #
   <button class="btn-settings" onclick="openPicker()">⚽ My Sports</button>
 </div>
 
-<!-- Sport picker overlay -->
 <div class="overlay" id="overlay">
   <div class="overlay-header">
     <div>
@@ -102,27 +97,86 @@ body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #
 
 <script>
 const SERVER = 'https://epg-app-production.up.railway.app';
+
 const SPORTS = [
-  { id: 'soccer', name: 'Soccer', emoji: '⚽', keywords: ['soccer','football','premier','champions','la liga','bundesliga','serie a','ligue','epl','fa cup','mls','world cup','euro'] },
-  { id: 'nrl', name: 'NRL', emoji: '🏉', keywords: ['nrl','rugby league','state of origin'] },
-  { id: 'rugby_union', name: 'Rugby Union', emoji: '🏈', keywords: ['rugby union','super rugby','six nations','rugby world'] },
-  { id: 'afl', name: 'AFL', emoji: '🦘', keywords: ['afl','aussie rules'] },
-  { id: 'cricket', name: 'Cricket', emoji: '🏏', keywords: ['cricket','ashes','test match','ipl','big bash'] },
+  { id: 'soccer', name: 'Soccer', emoji: '⚽', keywords: ['premier league','champions league','la liga','bundesliga','serie a','ligue 1','europa league','fa cup','epl','mls','world cup','euro 20','soccer','football match','vs.*fc','fc.*vs'] },
+  { id: 'nrl', name: 'NRL', emoji: '🏉', keywords: ['nrl','rugby league','state of origin','nrl premiership'] },
+  { id: 'rugby_union', name: 'Rugby Union', emoji: '🏆', keywords: ['rugby union','super rugby','six nations','rugby world cup','premiership rugby','united rugby'] },
+  { id: 'afl', name: 'AFL', emoji: '🦘', keywords: ['afl','australian football','aussie rules','afl premiership'] },
+  { id: 'cricket', name: 'Cricket', emoji: '🏏', keywords: ['cricket','ashes','test match','ipl','big bash','one-day','t20','odi','county cricket'] },
   { id: 'nba', name: 'NBA', emoji: '🏀', keywords: ['nba','basketball'] },
-  { id: 'nfl', name: 'NFL', emoji: '🏈', keywords: ['nfl','american football','super bowl'] },
-  { id: 'tennis', name: 'Tennis', emoji: '🎾', keywords: ['tennis','wimbledon','us open','australian open','french open','atp','wta'] },
-  { id: 'golf', name: 'Golf', emoji: '⛳', keywords: ['golf','pga','masters','open championship','ryder cup'] },
-  { id: 'f1', name: 'Formula 1', emoji: '🏎️', keywords: ['formula 1','f1','grand prix','motogp'] },
-  { id: 'boxing', name: 'Boxing / MMA', emoji: '🥊', keywords: ['boxing','ufc','mma','fight'] },
+  { id: 'nfl', name: 'NFL', emoji: '🏈', keywords: ['nfl','american football','super bowl','ncaa football'] },
+  { id: 'tennis', name: 'Tennis', emoji: '🎾', keywords: ['tennis','wimbledon','us open','australian open','french open','roland garros','atp','wta','davis cup'] },
+  { id: 'golf', name: 'Golf', emoji: '⛳', keywords: ['golf','pga tour','masters','the open','ryder cup','lpga','charles schwab','liv golf'] },
+  { id: 'f1', name: 'Formula 1', emoji: '🏎️', keywords: ['formula 1','formula one','f1','grand prix','motogp','indycar'] },
+  { id: 'boxing', name: 'Boxing / MMA', emoji: '🥊', keywords: ['boxing','ufc','mma','fight night','world title','bout'] },
   { id: 'ice_hockey', name: 'Ice Hockey', emoji: '🏒', keywords: ['ice hockey','nhl','hockey'] },
   { id: 'baseball', name: 'Baseball', emoji: '⚾', keywords: ['baseball','mlb'] },
-  { id: 'cycling', name: 'Cycling', emoji: '🚴', keywords: ['cycling','tour de france','velodrome'] },
-  { id: 'racing', name: 'Motorsport', emoji: '🏁', keywords: ['supercars','v8','motorsport','nascar','indycar'] },
-  { id: 'olympic', name: 'Olympics', emoji: '🏅', keywords: ['olympic','commonwealth games','athletics'] },
+  { id: 'cycling', name: 'Cycling', emoji: '🚴', keywords: ['cycling','tour de france','giro d\'italia','vuelta','velodrome'] },
+  { id: 'racing', name: 'Motorsport', emoji: '🏁', keywords: ['supercars','v8 supercars','motorsport','nascar','indycar','bathurst'] },
+  { id: 'olympic', name: 'Olympics', emoji: '🏅', keywords: ['olympic','commonwealth games','athletics','world championships'] },
 ];
+
+// Words that indicate it's NOT a live game
+const NON_LIVE = ['highlights','replay','classic','documentary','news','magazine','preview','analysis','best of','greatest','history of','story of','end of transmission','test card','teleshopping','infomercial','weather'];
 
 let channels = [], tab = 'my', shown = 20;
 let favSports = JSON.parse(localStorage.getItem('favSports') || '[]');
+
+function isNonLive(title) {
+  if (!title) return true;
+  const t = title.toLowerCase();
+  if (NON_LIVE.some(w => t.includes(w))) return true;
+  if (t === 'end of transmission') return true;
+  return false;
+}
+
+function getSportFromProgramme(title, desc) {
+  // Match against programme title first (most reliable)
+  const text = ((title || '') + ' ' + (desc || '')).toLowerCase();
+  for (const sport of SPORTS) {
+    if (sport.keywords.some(k => text.includes(k))) return sport;
+  }
+  return null;
+}
+
+function getSportFromChannel(name) {
+  // Fallback: match against channel name
+  const n = (name || '').toLowerCase();
+  for (const sport of SPORTS) {
+    if (sport.keywords.some(k => n.includes(k))) return sport;
+  }
+  return null;
+}
+
+function getChannelSport(ch) {
+  // Priority 1: what's currently on (most accurate)
+  if (ch.now && !isNonLive(ch.now.title)) {
+    const s = getSportFromProgramme(ch.now.title, ch.now.desc);
+    if (s) return s;
+  }
+  // Priority 2: what's coming up next
+  for (const p of (ch.next || [])) {
+    if (!isNonLive(p.title)) {
+      const s = getSportFromProgramme(p.title, p.desc);
+      if (s) return s;
+    }
+  }
+  // Priority 3: channel name (least reliable, last resort)
+  return getSportFromChannel(ch.name);
+}
+
+function isFavSport(ch) {
+  if (!favSports.length) return false;
+  const sport = getChannelSport(ch);
+  return sport ? favSports.includes(sport.id) : false;
+}
+
+function isLiveGame(ch) {
+  if (!ch.now) return false;
+  if (isNonLive(ch.now.title)) return false;
+  return getSportFromProgramme(ch.now.title, ch.now.desc) !== null;
+}
 
 function openPicker() {
   const grid = document.getElementById('sport-grid');
@@ -151,17 +205,6 @@ function saveSports() {
   render();
 }
 
-function getSportMatch(ch) {
-  const text = [ch.name, (ch.now||{}).title, ...((ch.next||[]).map(p=>p.title))].filter(Boolean).join(' ').toLowerCase();
-  return SPORTS.filter(s => s.keywords.some(k => text.includes(k)));
-}
-
-function isFavSport(ch) {
-  if (!favSports.length) return false;
-  const matched = getSportMatch(ch);
-  return matched.some(s => favSports.includes(s.id));
-}
-
 function fmt(raw) {
   if (!raw) return '';
   const s = raw.toString().trim();
@@ -185,8 +228,8 @@ function setTab(el, t) {
 function filtered() {
   const q = (document.getElementById('search')?.value || '').toLowerCase();
   return channels.filter(ch => {
-    if (tab === 'my') return ch.now && isFavSport(ch);
-    if (tab === 'now') return ch.now;
+    if (tab === 'my') return ch.now && !isNonLive(ch.now.title) && isFavSport(ch);
+    if (tab === 'now') return ch.now && !isNonLive(ch.now.title);
     if (q) {
       const nm = (ch.name||'').toLowerCase().includes(q);
       const np = ((ch.now||{}).title||'').toLowerCase().includes(q);
@@ -202,35 +245,27 @@ function render() {
   const el = document.getElementById('channel-list');
 
   if (tab === 'my' && !favSports.length) {
-    el.innerHTML = `<div class="empty-fav">
-      <h3>Pick your sports</h3>
-      <p>Tell us what you watch and we'll show you what's on live right now.</p>
-      <button onclick="openPicker()">Choose my sports</button>
-    </div>`;
+    el.innerHTML = `<div class="empty-fav"><h3>Pick your sports</h3><p>Tell us what you watch and we'll show you what's on live right now.</p><button onclick="openPicker()">Choose my sports</button></div>`;
     return;
   }
-
   if (tab === 'my' && !list.length) {
-    el.innerHTML = `<div class="empty-fav">
-      <h3>Nothing on right now</h3>
-      <p>None of your sports are currently live. Check back later or browse All On Now.</p>
-      <button onclick="openPicker()">Update my sports</button>
-    </div>`;
+    el.innerHTML = `<div class="empty-fav"><h3>Nothing on right now</h3><p>None of your sports are currently live. Check back later or browse All On Now.</p><button onclick="openPicker()">Update my sports</button></div>`;
     return;
   }
-
   if (!list.length) { el.innerHTML = '<div class="status-msg">No channels match.</div>'; return; }
 
   const toShow = list.slice(0, shown);
   el.innerHTML = toShow.map(ch => {
-    const sports = getSportMatch(ch);
-    const sportBadge = sports.length ? `<span class="badge-sport">${sports[0].emoji} ${sports[0].name}</span>` : '';
+    const sport = getChannelSport(ch);
+    const live = isLiveGame(ch);
+    const sportBadge = sport ? `<span class="badge-sport">${sport.emoji} ${sport.name}</span>` : '';
+    const liveBadge = live ? `<span class="badge-live">● Live</span>` : '';
     const logo = ch.logo
       ? `<img class="logo" src="${ch.logo}" alt="" onerror="this.style.display='none';this.nextSibling.style.display='flex'" /><div class="logo-placeholder" style="display:none">${(ch.name||'').slice(0,3)}</div>`
       : `<div class="logo-placeholder">${(ch.name||'').slice(0,3)}</div>`;
     let ph = '';
     if (ch.now) {
-      ph += `<div class="programme"><div class="prog-time">${fmt(ch.now.startRaw)}</div><div style="flex:1"><div class="prog-title">${ch.now.title}<span class="badge-now">Now</span>${sportBadge}</div>${ch.now.desc?`<div class="prog-desc">${ch.now.desc}</div>`:''}<div class="progress-wrap"><div class="progress-bar" style="width:${ch.now.pct}%"></div></div></div></div>`;
+      ph += `<div class="programme"><div class="prog-time">${fmt(ch.now.startRaw)}</div><div style="flex:1"><div class="prog-title">${ch.now.title}<span class="badge-now">Now</span>${liveBadge}${sportBadge}</div>${ch.now.desc?`<div class="prog-desc">${ch.now.desc}</div>`:''}<div class="progress-wrap"><div class="progress-bar" style="width:${ch.now.pct}%"></div></div></div></div>`;
     }
     (ch.next||[]).forEach(p => {
       ph += `<div class="programme"><div class="prog-time">${fmt(p.startRaw)}</div><div style="flex:1"><div class="prog-title">${p.title}</div>${p.desc?`<div class="prog-desc">${p.desc}</div>`:''}</div></div>`;
@@ -265,9 +300,7 @@ async function load() {
     channels = await res.json();
     document.getElementById('subtitle').textContent = channels.length.toLocaleString() + ' channels loaded';
     document.getElementById('tabs').style.display = 'flex';
-    if (!favSports.length) {
-      setTimeout(openPicker, 500);
-    }
+    if (!favSports.length) setTimeout(openPicker, 500);
     render();
   } catch(e) {
     document.getElementById('channel-list').innerHTML = `<div class="error-msg"><strong>Could not load EPG</strong><br><br>Error: ${e.message}</div>`;
