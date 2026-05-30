@@ -23,10 +23,6 @@ const ESPN_LEAGUES = [
   { id: 'soccer_ita',  url: `${ESPN_BASE}/soccer/ita.1/scoreboard`,             emoji: '⚽' },
   { id: 'soccer_aus',  url: `${ESPN_BASE}/soccer/aus.1/scoreboard`,             emoji: '⚽' },
   { id: 'soccer_fra',  url: `${ESPN_BASE}/soccer/fra.1/scoreboard`,             emoji: '⚽' },
- { id: 'tennis_rg',   url: `${ESPN_BASE}/tennis/french-open/scoreboard`,        emoji: '🎾' },
-  { id: 'tennis_ao',   url: `${ESPN_BASE}/tennis/australian-open/scoreboard`,    emoji: '🎾' },
-  { id: 'tennis_usop', url: `${ESPN_BASE}/tennis/us-open/scoreboard`,            emoji: '🎾' },
-  { id: 'tennis_wimb', url: `${ESPN_BASE}/tennis/wimbledon/scoreboard`,          emoji: '🎾' },
   { id: 'golf_pga',    url: `${ESPN_BASE}/golf/pga/scoreboard`,                 emoji: '⛳' },
   { id: 'golf_eur',    url: `${ESPN_BASE}/golf/eur/scoreboard`,                 emoji: '⛳' },
   { id: 'mma',         url: `${ESPN_BASE}/mma/ufc/scoreboard`,                  emoji: '🥊' },
@@ -37,7 +33,6 @@ const LEAGUE_TO_SPORT = {
   nrl: 'nrl', afl: 'afl', nba: 'nba', nfl: 'nfl', nhl: 'ice_hockey',
   mlb: 'baseball', soccer_epl: 'soccer', soccer_ucl: 'soccer',
   soccer_mls: 'soccer', soccer_esp: 'soccer', soccer_ger: 'soccer',
-  soccer_ita: 'soccer',soccer_aus: 'soccer', soccer_fra: 'soccer', tennis_atp: 'tennis', tennis_wta: 'tennis',
   golf_pga: 'golf', golf_eur: 'golf', mma: 'boxing', f1: 'f1',
 };
 
@@ -229,7 +224,7 @@ const SPORT_KEYWORDS = {
   cycling:     ['cycling','tour de france','giro','vuelta','paris-roubaix','tour down under'],
   racing:      ['supercars','v8','bathurst','nascar','indycar','motogp','formula e'],
   olympic:     ['olympic','commonwealth games','world championships','athletics','track and field'],
-  tennis:      ['tennis','roland-garros','roland garros','french open','wimbledon','us open','australian open','atp','wta','grand slam','davis cup'],
+
   boxing:      ['boxing','wbc','wba','ibf','wbo','fight night','world title fight','heavyweight','prizefighter'],
   nrl:         ['nrl','rugby league','state of origin','national rugby league'],
   afl:         ['afl','australian football','aussie rules','vfl'],
