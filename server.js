@@ -350,7 +350,8 @@ app.get('/fixtures', (req, res) => {
 });
 app.get('/debug', (req, res) => {
   if (!cache) return res.status(503).json({ error: 'not ready' });
-  const ch = cache.find(c => c.name.toLowerCase().includes('sky sports golf'));
+  const q = (req.query.q || 'sky sports golf').toLowerCase();
+  const ch = cache.find(c => c.name.toLowerCase().includes(q));
   res.json(ch || { error: 'channel not found' });
 });
 
