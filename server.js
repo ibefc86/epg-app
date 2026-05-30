@@ -295,6 +295,10 @@ async function refresh() {
   setTimeout(refresh, 30 * 60 * 1000);
 }
 
+app.get('/guide', (req, res) => {
+  if (!cache) return res.status(503).json({ error: 'EPG still loading, try again in 30 seconds' });
+  res.json(cache);
+});
 app.get('/debug', (req, res) => {
   if (!cache) return res.status(503).json({ error: 'not ready' });
   const ch = cache.find(c => c.name.toLowerCase().includes('sky sports golf'));
