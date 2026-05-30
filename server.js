@@ -135,9 +135,12 @@ async function fetchESPNFixtures() {
         away: away.toLowerCase(),
         homeShort: homeShort.toLowerCase(),
         awayShort: awayShort.toLowerCase(),
+        // Clean display name for the grouped card title
+        displayName: `${home} v ${away}`,
         isLive: state === 'in',
         isUpcoming: state === 'pre',
         isFinished: state === 'post',
+        fixtureKey: `${home.toLowerCase()}__${away.toLowerCase()}`,
       });
     }
   }
@@ -166,28 +169,21 @@ function matchFixture(title) {
   const t = title.toLowerCase();
 
   for (const fix of fixtureCache) {
-    // Match full event name
     if (fix.name && fix.name.length > 5 && t.includes(fix.name.slice(0, 20))) return fix;
 
-    // Match any word from home AND any word from away (4+ chars)
     if (fix.home && fix.away) {
       const homeWords = fix.home.split(' ').filter(w => w.length >= 4);
       const awayWords = fix.away.split(' ').filter(w => w.length >= 4);
       if (homeWords.length && awayWords.length) {
-        const homeMatch = homeWords.some(w => t.includes(w));
-        const awayMatch = awayWords.some(w => t.includes(w));
-        if (homeMatch && awayMatch) return fix;
+        if (homeWords.some(w => t.includes(w)) && awayWords.some(w => t.includes(w))) return fix;
       }
     }
 
-    // Match short display names
     if (fix.homeShort && fix.awayShort) {
       const homeWords = fix.homeShort.split(' ').filter(w => w.length >= 4);
       const awayWords = fix.awayShort.split(' ').filter(w => w.length >= 4);
       if (homeWords.length && awayWords.length) {
-        const homeMatch = homeWords.some(w => t.includes(w));
-        const awayMatch = awayWords.some(w => t.includes(w));
-        if (homeMatch && awayMatch) return fix;
+        if (homeWords.some(w => t.includes(w)) && awayWords.some(w => t.includes(w))) return fix;
       }
     }
   }
@@ -208,7 +204,7 @@ function keywordSport(title) {
   for (const [id, kws] of Object.entries(SPORT_KEYWORDS)) {
     if (kws.some(k => t.includes(k))) {
       const EMOJI = { cricket:'🏏', rugby_union:'🏆', cycling:'🚴', racing:'🏁', olympic:'🏅' };
-      return { sportId: id, emoji: EMOJI[id] || '🏟️', isLive: false };
+      return { sportId: id, emoji: EMOJI[id] || '🏟️', isLive: false, fixtureKey: null, displayName: null };
     }
   }
   return null;
@@ -217,9 +213,15 @@ function keywordSport(title) {
 function classifyProgramme(title) {
   if (!title || isNonLive(title)) return null;
   const fix = matchFixture(title);
-  if (fix) return { sportId: fix.sportId, emoji: fix.emoji, isLive: fix.isLive };
+  if (fix) return {
+    sportId: fix.sportId,
+    emoji: fix.emoji,
+    isLive: fix.isLive,
+    fixtureKey: fix.isLive ? fix.fixtureKey : null,
+    displayName: fix.isLive ? fix.displayName : null,
+  };
   const kw = keywordSport(title);
-  if (kw) return { sportId: kw.sportId, emoji: kw.emoji, isLive: false };
+  if (kw) return kw;
   return null;
 }
 

@@ -33,14 +33,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #
 .search-bar input { width: 100%; background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 10px 14px; color: #fff; font-size: 14px; outline: none; }
 .search-bar input::placeholder { color: #555; }
 .channel-list { padding: 1rem 1.5rem; max-width: 900px; }
-
-/* Match grouped card */
 .match-card { background: #1a1a1a; border-radius: 12px; padding: 1rem; margin-bottom: 10px; border: 1px solid #222; }
 .match-card.live-card { border-color: #dc2626; border-width: 1.5px; }
-.match-title { font-size: 15px; font-weight: 500; color: #fff; margin-bottom: 6px; }
-.match-meta { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+.match-title { font-size: 16px; font-weight: 600; color: #fff; margin-bottom: 6px; }
+.match-meta { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
 .match-time { font-size: 12px; color: #555; }
-.progress-wrap { height: 3px; background: #333; border-radius: 2px; margin-bottom: 10px; }
+.match-desc { font-size: 12px; color: #555; margin-bottom: 10px; line-height: 1.4; }
+.progress-wrap { height: 3px; background: #333; border-radius: 2px; margin-bottom: 12px; }
 .progress-bar { height: 100%; background: #3b82f6; border-radius: 2px; }
 .live-card .progress-bar { background: #dc2626; }
 .channel-chips { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -48,26 +47,22 @@ body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #
 .chip-logo { width: 20px; height: 20px; object-fit: contain; border-radius: 3px; }
 .chip-logo-placeholder { width: 20px; height: 20px; border-radius: 3px; background: #2a2a2a; display: flex; align-items: center; justify-content: center; font-size: 8px; color: #555; flex-shrink: 0; }
 .chip-name { font-size: 12px; color: #aaa; }
-.chip-quality { font-size: 10px; color: #555; }
-
-/* Channel card (for All On Now / All Channels) */
+.chip-quality { font-size: 10px; color: #555; margin-left: 2px; }
 .channel-card { background: #1a1a1a; border-radius: 12px; padding: 1rem; margin-bottom: 10px; border: 1px solid #222; }
 .channel-card.live-card { border-color: #dc2626; border-width: 1.5px; }
 .channel-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .logo { width: 38px; height: 38px; object-fit: contain; border-radius: 6px; background: #111; flex-shrink: 0; }
 .logo-placeholder { width: 38px; height: 38px; border-radius: 6px; background: #2a2a2a; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #555; flex-shrink: 0; }
 .channel-name { font-size: 14px; font-weight: 500; }
-.channel-meta { font-size: 11px; color: #555; margin-top: 2px; }
+.channel-meta-small { font-size: 11px; color: #555; margin-top: 2px; }
 .programme { display: flex; gap: 10px; padding: 6px 0; border-top: 1px solid #222; }
 .prog-time { font-size: 12px; color: #555; min-width: 75px; flex-shrink: 0; padding-top: 2px; }
 .prog-title { font-size: 13px; color: #ddd; font-weight: 500; }
 .prog-desc { font-size: 12px; color: #555; margin-top: 3px; line-height: 1.4; }
-
 .badge-now { display: inline-block; background: #16a34a; color: #fff; font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 10px; margin-left: 6px; vertical-align: middle; }
 .badge-live { display: inline-block; background: #dc2626; color: #fff; font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 10px; margin-left: 4px; vertical-align: middle; animation: pulse 1.5s infinite; }
 .badge-sport { display: inline-block; font-size: 10px; padding: 2px 6px; border-radius: 10px; margin-left: 4px; vertical-align: middle; background: #1d4ed8; color: #fff; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-
 .load-more-btn { display: block; width: 100%; padding: 12px; background: #1a1a1a; border: 1px solid #333; border-radius: 10px; color: #aaa; font-size: 14px; cursor: pointer; margin-top: 8px; }
 .status-msg { text-align: center; padding: 4rem 1rem; color: #555; font-size: 14px; }
 .error-msg { background: #1a0a0a; border: 1px solid #5a1a1a; border-radius: 10px; padding: 1.25rem; color: #f87171; font-size: 13px; line-height: 1.7; margin: 1rem 0; }
@@ -190,14 +185,12 @@ function setTab(el, t) {
   render();
 }
 
-// Normalise title for grouping — strip channel prefixes like "NRL : " or "NRL Rugby : "
 function normaliseTitle(title) {
   if (!title) return '';
   return title
     .replace(/^(NRL|AFL|NBA|NFL|NHL|MLB|Golf|Tennis|Rugby|Soccer|Football|Cricket)\s*:\s*/i, '')
-    .replace(/^(NRL Rugby|Super League Rugby|NRL Premiership)\s*:\s*/i, '')
-    .replace(/\s*\u1D4B\u1D5B\u1D47\s*$/g, '') // strip ˛ᵛᵉ suffix
-    .replace(/\s*[\u02B0-\u02FF\u1D00-\u1DBF]+\s*$/, '') // strip other superscripts
+    .replace(/^(NRL Rugby|Super League Rugby|NRL Premiership|LIVE)\s*[:\-]?\s*/i, '')
+    .replace(/\s*[\u02B0-\u02FF\u1D00-\u1DBF]+\s*$/, '')
     .trim();
 }
 
@@ -205,11 +198,12 @@ function groupByMatch(filteredChannels) {
   const groups = {};
   for (const ch of filteredChannels) {
     if (!ch.now) continue;
-    const key = normaliseTitle(ch.now.title).toLowerCase();
+    // Use fixtureKey if available (ESPN match) otherwise fall back to normalised title
+    const key = ch.now.sport?.fixtureKey || normaliseTitle(ch.now.title).toLowerCase();
     if (!groups[key]) {
       groups[key] = {
-        title: normaliseTitle(ch.now.title),
-        rawTitle: ch.now.title,
+        // Use ESPN display name if available, otherwise clean EPG title
+        title: ch.now.sport?.displayName || normaliseTitle(ch.now.title),
         sport: ch.now.sport,
         isLive: ch.now.isLive,
         pct: ch.now.pct,
@@ -219,8 +213,9 @@ function groupByMatch(filteredChannels) {
       };
     }
     groups[key].channels.push(ch);
-    // Promote isLive if any channel has it
     if (ch.now.isLive) groups[key].isLive = true;
+    // Prefer ESPN display name for title
+    if (ch.now.sport?.displayName) groups[key].title = ch.now.sport.displayName;
   }
   return Object.values(groups).sort((a, b) => {
     if (a.isLive && !b.isLive) return -1;
@@ -240,8 +235,7 @@ function renderChip(ch) {
 function renderMatchCard(group) {
   const sport = group.sport;
   const sportName = sport ? (SPORT_NAMES[sport.sportId] || sport.sportId) : '';
-  const sportEmoji = sport?.emoji || '';
-  const sportBadge = sport ? `<span class="badge-sport">${sportEmoji} ${sportName}</span>` : '';
+  const sportBadge = sport ? `<span class="badge-sport">${sport.emoji} ${sportName}</span>` : '';
   const liveBadge = group.isLive ? `<span class="badge-live">● Live</span>` : '';
   const chips = group.channels.map(renderChip).join('');
   return `<div class="match-card${group.isLive?' live-card':''}">
@@ -250,7 +244,7 @@ function renderMatchCard(group) {
       <span class="match-time">${fmt(group.startRaw)}</span>
       ${liveBadge}${sportBadge}
     </div>
-    ${group.desc ? `<div style="font-size:12px;color:#555;margin-bottom:8px;line-height:1.4">${group.desc}</div>` : ''}
+    ${group.desc ? `<div class="match-desc">${group.desc}</div>` : ''}
     <div class="progress-wrap"><div class="progress-bar" style="width:${group.pct}%"></div></div>
     <div class="channel-chips">${chips}</div>
   </div>`;
@@ -272,7 +266,7 @@ function renderChannelCard(ch) {
     ph += `<div class="programme"><div class="prog-time">${fmt(p.startRaw)}</div><div style="flex:1"><div class="prog-title">${p.title}</div>${p.desc?`<div class="prog-desc">${p.desc}</div>`:''}</div></div>`;
   });
   if (!ch.now && !(ch.next||[]).length) ph = `<div class="programme"><div class="prog-time">—</div><div class="prog-title" style="color:#444">No schedule data</div></div>`;
-  return `<div class="channel-card${ch.now?.isLive?' live-card':''}"><div class="channel-header">${logo}<div><div class="channel-name">${ch.displayName||ch.name}${ch.quality?` <span style="font-size:10px;color:#555;font-weight:400">${ch.quality}</span>`:''}</div><div class="channel-meta">${ch.lang||''}</div></div></div>${ph}</div>`;
+  return `<div class="channel-card${ch.now?.isLive?' live-card':''}"><div class="channel-header">${logo}<div><div class="channel-name">${ch.displayName||ch.name}${ch.quality?` <span style="font-size:10px;color:#555;font-weight:400">${ch.quality}</span>`:''}</div><div class="channel-meta-small">${ch.lang||''}</div></div></div>${ph}</div>`;
 }
 
 function filtered() {
@@ -305,7 +299,6 @@ function render() {
   }
   if (!list.length) { el.innerHTML='<div class="status-msg">No channels match.</div>'; return; }
 
-  // Grouped match view for My Sports and Live Now
   if (tab === 'my' || tab === 'live') {
     const groups = groupByMatch(list);
     const liveGroups = groups.filter(g => g.isLive);
@@ -323,7 +316,6 @@ function render() {
     return;
   }
 
-  // Channel view for All On Now and All Channels
   el.innerHTML = list.slice(0, shown).map(renderChannelCard).join('');
   const old = document.getElementById('load-more');
   if (old) old.remove();
