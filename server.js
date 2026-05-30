@@ -361,6 +361,10 @@ app.get('/fixtures', (req, res) => {
   const upcoming = fixtureCache.filter(f => f.isUpcoming);
   res.json(upcoming);
 });
+app.get('/refresh', async (req, res) => {
+  res.json({ message: 'Refresh started' });
+  refresh();
+});
 app.get('/debug', (req, res) => {
   if (!cache) return res.status(503).json({ error: 'not ready' });
   const q = (req.query.q || 'sky sports golf').toLowerCase();
