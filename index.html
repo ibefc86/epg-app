@@ -14,7 +14,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #
 .btn-settings:hover { background: #222; }
 .overlay { position: fixed; inset: 0; background: #0f0f0f; z-index: 100; overflow-y: auto; display: none; }
 .overlay.active { display: block; }
-.overlay-header { padding: 1.5rem; border-bottom: 1px solid #222; display: flex; align-items: center; justify-content: space-between; }
+.overlay-header { padding: 1.5rem; border-bottom: 1px solid #222; }
 .overlay-header h2 { font-size: 20px; font-weight: 600; }
 .overlay-header p { font-size: 13px; color: #888; margin-top: 4px; }
 .sport-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; padding: 1.5rem; }
@@ -26,11 +26,10 @@ body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #
 .sport-card.selected .name { color: #60a5fa; }
 .overlay-footer { padding: 1.5rem; border-top: 1px solid #222; position: sticky; bottom: 0; background: #0f0f0f; }
 .btn-save { width: 100%; padding: 14px; background: #3b82f6; border: none; border-radius: 10px; color: #fff; font-size: 16px; font-weight: 600; cursor: pointer; }
-.btn-save:hover { background: #2563eb; }
 .tabs { display: flex; gap: 8px; padding: 1rem 1.5rem; border-bottom: 1px solid #222; flex-wrap: wrap; }
 .tab { padding: 7px 16px; border-radius: 20px; border: 1px solid #333; background: transparent; color: #aaa; font-size: 13px; cursor: pointer; }
 .tab.active { background: #fff; color: #000; border-color: #fff; font-weight: 500; }
-.search-bar { padding: 1rem 1.5rem; border-bottom: 1px solid #222; }
+.search-bar { padding: 1rem 1.5rem; border-bottom: 1px solid #222; display: none; }
 .search-bar input { width: 100%; background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 10px 14px; color: #fff; font-size: 14px; outline: none; }
 .search-bar input::placeholder { color: #555; }
 .channel-list { padding: 1rem 1.5rem; max-width: 900px; }
@@ -70,10 +69,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #
 
 <div class="overlay" id="overlay">
   <div class="overlay-header">
-    <div>
-      <h2>Pick your sports</h2>
-      <p>We'll show you what's on live for these</p>
-    </div>
+    <h2>Pick your sports</h2>
+    <p>We'll show you what's on live for these</p>
   </div>
   <div class="sport-grid" id="sport-grid"></div>
   <div class="overlay-footer">
@@ -87,7 +84,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #
   <button class="tab" onclick="setTab(this,'all')">All Channels</button>
 </div>
 
-<div class="search-bar" id="search-bar" style="display:none">
+<div class="search-bar" id="search-bar">
   <input type="text" id="search" placeholder="Search channels or shows..." oninput="render()" />
 </div>
 
@@ -99,104 +96,40 @@ body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #
 const SERVER = 'https://epg-app-production.up.railway.app';
 
 const SPORTS = [
-  { id: 'soccer', name: 'Soccer', emoji: '⚽', keywords: ['premier league','champions league','la liga','bundesliga','serie a','ligue 1','europa league','fa cup','epl','mls','world cup','euro 20','soccer','football match','vs.*fc','fc.*vs'] },
-  { id: 'nrl', name: 'NRL', emoji: '🏉', keywords: ['nrl','rugby league','state of origin','nrl premiership'] },
-  { id: 'rugby_union', name: 'Rugby Union', emoji: '🏆', keywords: ['rugby union','super rugby','six nations','rugby world cup','premiership rugby','united rugby'] },
-  { id: 'afl', name: 'AFL', emoji: '🦘', keywords: ['afl','australian football','aussie rules','afl premiership'] },
-  { id: 'cricket', name: 'Cricket', emoji: '🏏', keywords: ['cricket','ashes','test match','ipl','big bash','one-day','t20','odi','county cricket'] },
-  { id: 'nba', name: 'NBA', emoji: '🏀', keywords: ['nba','basketball'] },
-  { id: 'nfl', name: 'NFL', emoji: '🏈', keywords: ['nfl','american football','super bowl','ncaa football'] },
-  { id: 'tennis', name: 'Tennis', emoji: '🎾', keywords: ['tennis','wimbledon','us open','australian open','french open','roland garros','atp','wta','davis cup'] },
-  { id: 'golf', name: 'Golf', emoji: '⛳', keywords: ['golf','pga tour','masters','the open','ryder cup','lpga','charles schwab','liv golf'] },
-  { id: 'f1', name: 'Formula 1', emoji: '🏎️', keywords: ['formula 1','formula one','f1','grand prix','motogp','indycar'] },
-  { id: 'boxing', name: 'Boxing / MMA', emoji: '🥊', keywords: ['boxing','ufc','mma','fight night','world title','bout'] },
-  { id: 'ice_hockey', name: 'Ice Hockey', emoji: '🏒', keywords: ['ice hockey','nhl','hockey'] },
-  { id: 'baseball', name: 'Baseball', emoji: '⚾', keywords: ['baseball','mlb'] },
-  { id: 'cycling', name: 'Cycling', emoji: '🚴', keywords: ['cycling','tour de france','giro d\'italia','vuelta','velodrome'] },
-  { id: 'racing', name: 'Motorsport', emoji: '🏁', keywords: ['supercars','v8 supercars','motorsport','nascar','indycar','bathurst'] },
-  { id: 'olympic', name: 'Olympics', emoji: '🏅', keywords: ['olympic','commonwealth games','athletics','world championships'] },
+  { id: 'soccer',      name: 'Soccer',         emoji: '⚽' },
+  { id: 'nrl',         name: 'NRL',            emoji: '🏉' },
+  { id: 'rugby_union', name: 'Rugby Union',    emoji: '🏆' },
+  { id: 'afl',         name: 'AFL',            emoji: '🦘' },
+  { id: 'cricket',     name: 'Cricket',        emoji: '🏏' },
+  { id: 'nba',         name: 'NBA',            emoji: '🏀' },
+  { id: 'nfl',         name: 'NFL',            emoji: '🏈' },
+  { id: 'tennis',      name: 'Tennis',         emoji: '🎾' },
+  { id: 'golf',        name: 'Golf',           emoji: '⛳' },
+  { id: 'f1',          name: 'Formula 1',      emoji: '🏎️' },
+  { id: 'boxing',      name: 'Boxing / MMA',   emoji: '🥊' },
+  { id: 'ice_hockey',  name: 'Ice Hockey',     emoji: '🏒' },
+  { id: 'baseball',    name: 'Baseball',       emoji: '⚾' },
+  { id: 'cycling',     name: 'Cycling',        emoji: '🚴' },
+  { id: 'racing',      name: 'Motorsport',     emoji: '🏁' },
+  { id: 'olympic',     name: 'Olympics',       emoji: '🏅' },
 ];
-
-// Words that indicate it's NOT a live game
-const NON_LIVE = ['highlights','replay','classic','documentary','news','magazine','preview','analysis','best of','greatest','history of','story of','end of transmission','test card','teleshopping','infomercial','weather'];
 
 let channels = [], tab = 'my', shown = 20;
 let favSports = JSON.parse(localStorage.getItem('favSports') || '[]');
 
-function isNonLive(title) {
-  if (!title) return true;
-  const t = title.toLowerCase();
-  if (NON_LIVE.some(w => t.includes(w))) return true;
-  if (t === 'end of transmission') return true;
-  return false;
-}
-
-function getSportFromProgramme(title, desc) {
-  // Match against programme title first (most reliable)
-  const text = (title || '').toLowerCase();
-  for (const sport of SPORTS) {
-    if (sport.keywords.some(k => text.includes(k))) return sport;
-  }
-  return null;
-}
-
-function getSportFromChannel(name) {
-  // Fallback: match against channel name
-  const n = (name || '').toLowerCase();
-  for (const sport of SPORTS) {
-    if (sport.keywords.some(k => n.includes(k))) return sport;
-  }
-  return null;
-}
-
-function getChannelSport(ch) {
-  // Priority 1: what's currently on (most accurate)
-  if (ch.now && !isNonLive(ch.now.title)) {
-    const s = getSportFromProgramme(ch.now.title, ch.now.desc);
-    if (s) return s;
-  }
-  // Priority 2: what's coming up next
-  for (const p of (ch.next || [])) {
-    if (!isNonLive(p.title)) {
-      const s = getSportFromProgramme(p.title, p.desc);
-      if (s) return s;
-    }
-  }
-  // Priority 3: channel name (least reliable, last resort)
-  return getSportFromChannel(ch.name);
-}
-
-function isFavSport(ch) {
-  if (!favSports.length) return false;
-  const sport = getChannelSport(ch);
-  return sport ? favSports.includes(sport.id) : false;
-}
-
-function isLiveGame(ch) {
-  if (!ch.now) return false;
-  if (isNonLive(ch.now.title)) return false;
-  return getSportFromProgramme(ch.now.title, ch.now.desc) !== null;
-}
-
 function openPicker() {
-  const grid = document.getElementById('sport-grid');
-  grid.innerHTML = SPORTS.map(s => `
-    <div class="sport-card ${favSports.includes(s.id) ? 'selected' : ''}" onclick="toggleSport('${s.id}', this)">
+  document.getElementById('sport-grid').innerHTML = SPORTS.map(s =>
+    `<div class="sport-card ${favSports.includes(s.id)?'selected':''}" onclick="toggleSport('${s.id}',this)">
       <div class="emoji">${s.emoji}</div>
       <div class="name">${s.name}</div>
-    </div>
-  `).join('');
+    </div>`
+  ).join('');
   document.getElementById('overlay').classList.add('active');
 }
 
 function toggleSport(id, el) {
-  if (favSports.includes(id)) {
-    favSports = favSports.filter(s => s !== id);
-    el.classList.remove('selected');
-  } else {
-    favSports.push(id);
-    el.classList.add('selected');
-  }
+  favSports = favSports.includes(id) ? favSports.filter(s=>s!==id) : [...favSports, id];
+  el.classList.toggle('selected', favSports.includes(id));
 }
 
 function saveSports() {
@@ -219,21 +152,21 @@ function fmt(raw) {
 
 function setTab(el, t) {
   tab = t; shown = 20;
-  document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
   el.classList.add('active');
-  document.getElementById('search-bar').style.display = t === 'all' ? 'block' : 'none';
+  document.getElementById('search-bar').style.display = t==='all' ? 'block' : 'none';
   render();
 }
 
 function filtered() {
-  const q = (document.getElementById('search')?.value || '').toLowerCase();
+  const q = (document.getElementById('search')?.value||'').toLowerCase();
   return channels.filter(ch => {
-    if (tab === 'my') return ch.now && !isNonLive(ch.now.title) && isFavSport(ch);
-    if (tab === 'now') return ch.now && !isNonLive(ch.now.title);
+    if (tab==='my') return ch.now && ch.now.sport && favSports.includes(ch.now.sport.sportId);
+    if (tab==='now') return ch.now;
     if (q) {
-      const nm = (ch.name||'').toLowerCase().includes(q);
-      const np = ((ch.now||{}).title||'').toLowerCase().includes(q);
-      const nx = (ch.next||[]).some(p=>(p.title||'').toLowerCase().includes(q));
+      const nm=(ch.name||'').toLowerCase().includes(q);
+      const np=((ch.now||{}).title||'').toLowerCase().includes(q);
+      const nx=(ch.next||[]).some(p=>(p.title||'').toLowerCase().includes(q));
       if (!nm&&!np&&!nx) return false;
     }
     return true;
@@ -244,24 +177,22 @@ function render() {
   const list = filtered();
   const el = document.getElementById('channel-list');
 
-  if (tab === 'my' && !favSports.length) {
-    el.innerHTML = `<div class="empty-fav"><h3>Pick your sports</h3><p>Tell us what you watch and we'll show you what's on live right now.</p><button onclick="openPicker()">Choose my sports</button></div>`;
+  if (tab==='my' && !favSports.length) {
+    el.innerHTML = `<div class="empty-fav"><h3>Pick your sports</h3><p>Tell us what you watch and we'll show you what's live right now.</p><button onclick="openPicker()">Choose my sports</button></div>`;
     return;
   }
-  if (tab === 'my' && !list.length) {
-    el.innerHTML = `<div class="empty-fav"><h3>Nothing on right now</h3><p>None of your sports are currently live. Check back later or browse All On Now.</p><button onclick="openPicker()">Update my sports</button></div>`;
+  if (tab==='my' && !list.length) {
+    el.innerHTML = `<div class="empty-fav"><h3>Nothing on right now</h3><p>None of your sports are currently live. Check back later.</p><button onclick="openPicker()">Update my sports</button></div>`;
     return;
   }
-  if (!list.length) { el.innerHTML = '<div class="status-msg">No channels match.</div>'; return; }
+  if (!list.length) { el.innerHTML='<div class="status-msg">No channels match.</div>'; return; }
 
-  const toShow = list.slice(0, shown);
-  el.innerHTML = toShow.map(ch => {
-    const sport = getChannelSport(ch);
-    const live = isLiveGame(ch);
-    const sportBadge = sport ? `<span class="badge-sport">${sport.emoji} ${sport.name}</span>` : '';
-    const liveBadge = live ? `<span class="badge-live">● Live</span>` : '';
+  el.innerHTML = list.slice(0,shown).map(ch => {
+    const sport = ch.now?.sport;
+    const sportBadge = sport ? `<span class="badge-sport">${sport.sportEmoji} ${SPORTS.find(s=>s.id===sport.sportId)?.name||sport.sportId}</span>` : '';
+    const liveBadge = ch.now?.isLive ? `<span class="badge-live">● Live</span>` : '';
     const logo = ch.logo
-      ? `<img class="logo" src="${ch.logo}" alt="" onerror="this.style.display='none';this.nextSibling.style.display='flex'" /><div class="logo-placeholder" style="display:none">${(ch.name||'').slice(0,3)}</div>`
+      ? `<img class="logo" src="${ch.logo}" alt="" onerror="this.style.display='none';this.nextSibling.style.display='flex'"/><div class="logo-placeholder" style="display:none">${(ch.name||'').slice(0,3)}</div>`
       : `<div class="logo-placeholder">${(ch.name||'').slice(0,3)}</div>`;
     let ph = '';
     if (ch.now) {
@@ -270,40 +201,33 @@ function render() {
     (ch.next||[]).forEach(p => {
       ph += `<div class="programme"><div class="prog-time">${fmt(p.startRaw)}</div><div style="flex:1"><div class="prog-title">${p.title}</div>${p.desc?`<div class="prog-desc">${p.desc}</div>`:''}</div></div>`;
     });
-    if (!ch.now && !(ch.next||[]).length) {
-      ph = `<div class="programme"><div class="prog-time">—</div><div class="prog-title" style="color:#444">No schedule data</div></div>`;
-    }
-    return `<div class="channel-card"><div class="channel-header">${logo}<div><div class="channel-name">${ch.displayName || ch.name}${ch.quality ? ` <span style="font-size:10px;color:#555;font-weight:400">${ch.quality}</span>` : ''}${ch.variants > 1 ? ` <span style="font-size:10px;color:#444;font-weight:400">${ch.variants} streams</span>` : ''}</div><div class="channel-meta">${ch.lang||''}</div></div></div>${ph}</div>`;
+    if (!ch.now && !(ch.next||[]).length) ph = `<div class="programme"><div class="prog-time">—</div><div class="prog-title" style="color:#444">No schedule data</div></div>`;
+    return `<div class="channel-card"><div class="channel-header">${logo}<div><div class="channel-name">${ch.displayName||ch.name}${ch.quality?` <span style="font-size:10px;color:#555;font-weight:400">${ch.quality}</span>`:''}</div><div class="channel-meta">${ch.lang||''}</div></div></div>${ph}</div>`;
   }).join('');
 
   const old = document.getElementById('load-more');
   if (old) old.remove();
   if (list.length > shown) {
     const btn = document.createElement('button');
-    btn.id = 'load-more';
-    btn.className = 'load-more-btn';
-    btn.textContent = `Show more (${list.length - shown} remaining)`;
-    btn.onclick = () => { shown += 20; render(); };
+    btn.id='load-more'; btn.className='load-more-btn';
+    btn.textContent=`Show more (${list.length-shown} remaining)`;
+    btn.onclick=()=>{shown+=20;render();};
     el.appendChild(btn);
   }
 }
 
 async function load() {
   try {
-    const res = await fetch(SERVER + '/guide');
-    if (res.status === 503) {
-      document.getElementById('subtitle').textContent = 'Loading EPG, retrying...';
-      setTimeout(load, 15000);
-      return;
-    }
-    if (!res.ok) throw new Error('Server returned ' + res.status);
+    const res = await fetch(SERVER+'/guide');
+    if (res.status===503) { document.getElementById('subtitle').textContent='Loading EPG, retrying...'; setTimeout(load,15000); return; }
+    if (!res.ok) throw new Error('Server returned '+res.status);
     channels = await res.json();
-    document.getElementById('subtitle').textContent = channels.length.toLocaleString() + ' channels loaded';
-    document.getElementById('tabs').style.display = 'flex';
+    document.getElementById('subtitle').textContent = channels.length.toLocaleString()+' channels loaded';
+    document.getElementById('tabs').style.display='flex';
     if (!favSports.length) setTimeout(openPicker, 500);
     render();
   } catch(e) {
-    document.getElementById('channel-list').innerHTML = `<div class="error-msg"><strong>Could not load EPG</strong><br><br>Error: ${e.message}</div>`;
+    document.getElementById('channel-list').innerHTML=`<div class="error-msg"><strong>Could not load EPG</strong><br><br>Error: ${e.message}</div>`;
   }
 }
 
