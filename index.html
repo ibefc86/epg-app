@@ -234,10 +234,11 @@ function groupUpcoming(channels, favSports) {
       if (!sport) continue;
       if (favSports.length && !favSports.includes(sport.sportId)) continue;
       const key = normaliseTitle(prog.title).toLowerCase();
-      if (!groups[key]) {
-        groups[key] = {
-          title: normaliseTitle(prog.title),
-          sport: sport,
+      const fixtureKey = sport.fixtureKey || key;
+      if (!groups[fixtureKey]) {
+        groups[fixtureKey] = {
+          title: sport.displayName || normaliseTitle(prog.title),
+          sport: { sportId: sport.sportId, emoji: sport.emoji },
           isLive: false,
           pct: 0,
           startRaw: prog.startRaw,
@@ -245,11 +246,11 @@ function groupUpcoming(channels, favSports) {
           channels: []
         };
       }
-      if (!groups[key].channels.find(c => c.id === ch.id)) {
-        groups[key].channels.push(ch);
+      if (!groups[fixtureKey].channels.find(c => c.id === ch.id)) {
+        groups[fixtureKey].channels.push(ch);
       }
-      if (!groups[key].startRaw || prog.startRaw < groups[key].startRaw) {
-        groups[key].startRaw = prog.startRaw;
+      if (!groups[fixtureKey].startRaw || prog.startRaw < groups[fixtureKey].startRaw) {
+        groups[fixtureKey].startRaw = prog.startRaw;
       }
     }
   }
