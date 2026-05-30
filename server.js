@@ -1,0 +1,81 @@
+const express = require('express');
+const axios = require('axios');
+const path = require('path');
+const { DOMParser } = require('@xmldom/xmldom');
+const app = express();
+
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  next();
+});
+
+app.use(express.static(path.join(__dirname)));
+
+function parseDate(s) {
+  if (!s) return null;
+  s = s.toString().trim();
+  const utc = new Date(Date.UTC(+s.slice(0,4),+s.slice(4,6)-1,+s.slice(6,8),+s.slice(8,10),+s.slice(10,12),0));
+  const off = s.slice(12).trim();
+  if (off.length >= 3) {
+    const sign = off[0]==='-'?-1:1;
+    utc.setMinutes(utc.getMinutes() - sign*(+off.slice(1,3)*60+(+off.slice(3,5)||0)));
+  }
+  return utc;
+}
+
+app.get('/guide', async (req, res) => {
+  const url = req.query.url;
+  if (!url) return res.status(400).json({ error: 'No URL' });
+  try {
+    console.log('Fetching EPG...');
+    const response = await axios.get(url, { timeout: 60000, responseType: 'text' });
+    console.log('Parsing XML...');
+    const xml = new DOMParser().parseFromString(response.data, 'text/xml');
+    const now = new Date();
+
+    const channels = Array.from(xml.getElementsByTagName('channel')).map(c => ({
+      id: c.getAttribute('id'),
+      name: c.getElementsByTagName('display-name')[0]?.textContent || c.getAttribute('id'),
+      logo: c.getElementsByTagName('icon')[0]?.getAttribute('src') || '',
+      lang: c.getElementsByTagName('display-name')[0]?.getAttribute('lang') || ''
+    }));
+
+    const allProgs = Array.from(xml.getElementsByTagName('programme')).map(p => {
+      const startRaw = p.getAttribute('start');
+      const stopRaw = p.getAttribute('stop');
+      const start = parseDate(startRaw);
+      const stop = parseDate(stopRaw);
+      return {
+        channel: p.getAttribute('channel'),
+        start, stop, startRaw,
+        title: p.getElementsByTagName('title')[0]?.textContent || '',
+        desc: p.getElementsByTagName('desc')[0]?.textContent || ''
+      };
+    }).filter(p => p.start && p.stop);
+
+    const progsByChannel = {};
+    allProgs.forEach(p => {
+      if (!progsByChannel[p.channel]) progsByChannel[p.channel] = [];
+      progsByChannel[p.channel].push(p);
+    });
+
+    const result = channels.map(ch => {
+      const progs = (progsByChannel[ch.id] || []).sort((a,b) => a.start - b.start);
+      const nowP = progs.find(p => p.start <= now && p.stop > now);
+      const next = progs.filter(p => p.start > now).slice(0, 2);
+      return {
+        ...ch,
+        now: nowP ? { title: nowP.title, desc: nowP.desc.slice(0,150), startRaw: nowP.startRaw, pct: Math.min(100, Math.round(((now-nowP.start)/(nowP.stop-nowP.start))*100)) } : null,
+        next: next.map(p => ({ title: p.title, desc: p.desc.slice(0,100), startRaw: p.startRaw }))
+      };
+    });
+
+    console.log('Done. Sending', channels.length, 'channels');
+    res.json(result);
+  } catch(e) {
+    console.error(e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.listen(3001, () => console.log('EPG server running at http://localhost:3001'));
