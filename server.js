@@ -223,11 +223,20 @@ function matchFixture(title) {
 
 const SPORT_KEYWORDS = {
   cricket:     ['cricket','ashes','test match','ipl','indian premier league','big bash','t20','one-day','county cricket','icc','twenty20'],
-  rugby_union: ['rugby union','super rugby','six nations','premiership rugby','united rugby'],
-  golf:        ['dp world tour','pga tour','lpga','european tour','austrian open','ryder cup','golf channel'],
-  cycling:     ['cycling','tour de france','giro','vuelta'],
-  racing:      ['supercars','v8','bathurst','nascar'],
-  olympic:     ['olympic','commonwealth games','world championships','athletics'],
+  rugby_union: ['rugby union','super rugby','six nations','premiership rugby','united rugby','rugby championship','bledisloe'],
+  golf:        ['dp world tour','pga tour','lpga','european tour','ryder cup','golf channel','masters','the open','liv golf','pga championship','us open golf'],
+  cycling:     ['cycling','tour de france','giro','vuelta','paris-roubaix','tour down under'],
+  racing:      ['supercars','v8','bathurst','nascar','indycar','motogp','formula e'],
+  olympic:     ['olympic','commonwealth games','world championships','athletics','track and field'],
+  tennis:      ['tennis','roland-garros','roland garros','french open','wimbledon','us open','australian open','atp','wta','grand slam','davis cup'],
+  boxing:      ['boxing','wbc','wba','ibf','wbo','fight night','world title fight','heavyweight','prizefighter'],
+  nrl:         ['nrl','rugby league','state of origin','national rugby league'],
+  afl:         ['afl','australian football','aussie rules','vfl'],
+  soccer:      ['premier league','champions league','la liga','bundesliga','serie a','ligue 1','europa league','fa cup','epl','mls','world cup','euro 2026','a-league','socceroos'],
+  nba:         ['nba','basketball'],
+  nfl:         ['nfl','american football','super bowl','nfl draft'],
+  nhl:         ['nhl','ice hockey','stanley cup'],
+  mlb:         ['mlb','baseball','world series'],
 };
 
 function keywordSport(title) {
