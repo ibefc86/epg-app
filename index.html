@@ -210,10 +210,10 @@ function classifyUpcoming(prog) {
       }
     }
     if (fix.name && fix.name.length > 5) {
-      const fixWords = fix.name.split(' ').filter(w => w.length >= 5);
+      const fixWords = fix.name.split(' ').filter(w => w.length >= 6);
       const tClean = t.replace(/dp world tour|pga tour|golf|day \d+|live|round \d+/g, '').trim();
-      const tWords = tClean.split(/[\s,]+/).filter(w => w.length >= 5);
-      if (tWords.length >= 1 && tWords.every(w => fix.name.includes(w))) return fix;
+      const tWords = tClean.split(/[\s,]+/).filter(w => w.length >= 6);
+      if (tWords.length >= 2 && tWords.every(w => fix.name.includes(w))) return fix;
     }
   }
   return null;
