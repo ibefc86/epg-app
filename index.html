@@ -360,18 +360,14 @@ function filtered() {
   });
 }
 
- {
+ function render() {
   const list = filtered();
   const el = document.getElementById('channel-list');
 
   if (tab==='my' && !favSports.length) {
     el.innerHTML = `<div class="empty-fav"><h3>Pick your sports</h3><p>Tell us what you watch and we'll show you what's live right now.</p><button onclick="openPicker()">Choose my sports</button></div>`;
-   return;
+    return;
   }
-}
-
-function render()
-  {
 
   if (tab === 'my') {
     const liveGroups = groupByMatch(list).filter(g => g.isLive);
