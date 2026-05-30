@@ -177,6 +177,10 @@ function matchFixture(title) {
       const fixWords = fix.name.split(' ').filter(w => w.length >= 5);
       const matches = fixWords.filter(w => t.includes(w));
       if (fixWords.length >= 2 && matches.length >= 2) return fix;
+      // Also try matching EPG title words against ESPN name
+      const tClean = t.replace(/dp world tour|pga tour|golf|day \d+|live|round \d+/g, '').trim();
+      const tWords = tClean.split(/[\s,]+/).filter(w => w.length >= 5);
+      if (tWords.length >= 1 && tWords.every(w => fix.name.includes(w))) return fix;
     }
 
     if (fix.home && fix.away) {
