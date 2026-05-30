@@ -7,19 +7,36 @@
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #0f0f0f; color: #fff; }
-.header { padding: 1.5rem; border-bottom: 1px solid #222; }
-.header h1 { font-size: 22px; font-weight: 600; margin-bottom: 4px; }
-.header p { font-size: 13px; color: #888; }
-.stats { display: flex; gap: 12px; padding: 1rem 1.5rem; border-bottom: 1px solid #222; flex-wrap: wrap; }
-.stat { background: #1a1a1a; border-radius: 8px; padding: 10px 16px; min-width: 100px; }
-.stat-label { font-size: 11px; color: #666; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
-.stat-value { font-size: 22px; font-weight: 600; }
-.controls { padding: 1rem 1.5rem; display: flex; gap: 10px; flex-wrap: wrap; border-bottom: 1px solid #222; align-items: center; }
-.tab { padding: 7px 16px; border-radius: 20px; border: 1px solid #333; background: transparent; color: #aaa; font-size: 13px; cursor: pointer; transition: all 0.15s; }
+.header { padding: 1.5rem; border-bottom: 1px solid #222; display: flex; align-items: center; justify-content: space-between; }
+.header h1 { font-size: 22px; font-weight: 600; }
+.header p { font-size: 13px; color: #888; margin-top: 2px; }
+.btn-settings { background: #1a1a1a; border: 1px solid #333; border-radius: 8px; color: #aaa; padding: 8px 14px; font-size: 13px; cursor: pointer; }
+.btn-settings:hover { background: #222; }
+
+/* Sport picker overlay */
+.overlay { position: fixed; inset: 0; background: #0f0f0f; z-index: 100; overflow-y: auto; display: none; }
+.overlay.active { display: block; }
+.overlay-header { padding: 1.5rem; border-bottom: 1px solid #222; display: flex; align-items: center; justify-content: space-between; }
+.overlay-header h2 { font-size: 20px; font-weight: 600; }
+.overlay-header p { font-size: 13px; color: #888; margin-top: 4px; }
+.sport-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; padding: 1.5rem; }
+.sport-card { background: #1a1a1a; border: 2px solid #222; border-radius: 12px; padding: 1.25rem 1rem; text-align: center; cursor: pointer; transition: all 0.15s; }
+.sport-card:hover { background: #222; }
+.sport-card.selected { border-color: #3b82f6; background: #0f2044; }
+.sport-card .emoji { font-size: 32px; margin-bottom: 8px; }
+.sport-card .name { font-size: 13px; font-weight: 500; color: #ddd; }
+.sport-card.selected .name { color: #60a5fa; }
+.overlay-footer { padding: 1.5rem; border-top: 1px solid #222; position: sticky; bottom: 0; background: #0f0f0f; }
+.btn-save { width: 100%; padding: 14px; background: #3b82f6; border: none; border-radius: 10px; color: #fff; font-size: 16px; font-weight: 600; cursor: pointer; }
+.btn-save:hover { background: #2563eb; }
+
+/* Main content */
+.tabs { display: flex; gap: 8px; padding: 1rem 1.5rem; border-bottom: 1px solid #222; flex-wrap: wrap; }
+.tab { padding: 7px 16px; border-radius: 20px; border: 1px solid #333; background: transparent; color: #aaa; font-size: 13px; cursor: pointer; }
 .tab.active { background: #fff; color: #000; border-color: #fff; font-weight: 500; }
-input, select { background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 8px 12px; color: #fff; font-size: 13px; outline: none; }
-input { flex: 1; min-width: 180px; }
-input::placeholder { color: #555; }
+.search-bar { padding: 1rem 1.5rem; border-bottom: 1px solid #222; }
+.search-bar input { width: 100%; background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 10px 14px; color: #fff; font-size: 14px; outline: none; }
+.search-bar input::placeholder { color: #555; }
 .channel-list { padding: 1rem 1.5rem; max-width: 900px; }
 .channel-card { background: #1a1a1a; border-radius: 12px; padding: 1rem; margin-bottom: 10px; border: 1px solid #222; }
 .channel-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
@@ -32,51 +49,117 @@ input::placeholder { color: #555; }
 .prog-title { font-size: 13px; color: #ddd; font-weight: 500; }
 .prog-desc { font-size: 12px; color: #555; margin-top: 3px; line-height: 1.4; }
 .badge-now { display: inline-block; background: #16a34a; color: #fff; font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 10px; margin-left: 6px; vertical-align: middle; }
-.badge-sport { display: inline-block; background: #1d4ed8; color: #fff; font-size: 10px; padding: 2px 6px; border-radius: 10px; margin-left: 4px; vertical-align: middle; }
+.badge-sport { display: inline-block; font-size: 10px; padding: 2px 6px; border-radius: 10px; margin-left: 4px; vertical-align: middle; background: #1d4ed8; color: #fff; }
 .progress-wrap { height: 3px; background: #333; border-radius: 2px; margin-top: 6px; }
 .progress-bar { height: 100%; background: #3b82f6; border-radius: 2px; }
 .load-more-btn { display: block; width: 100%; padding: 12px; background: #1a1a1a; border: 1px solid #333; border-radius: 10px; color: #aaa; font-size: 14px; cursor: pointer; margin-top: 8px; }
 .status-msg { text-align: center; padding: 4rem 1rem; color: #555; font-size: 14px; }
 .error-msg { background: #1a0a0a; border: 1px solid #5a1a1a; border-radius: 10px; padding: 1.25rem; color: #f87171; font-size: 13px; line-height: 1.7; margin: 1rem 0; }
+.empty-fav { text-align: center; padding: 4rem 1.5rem; }
+.empty-fav h3 { font-size: 18px; font-weight: 500; margin-bottom: 8px; }
+.empty-fav p { font-size: 14px; color: #555; margin-bottom: 1.5rem; }
+.empty-fav button { background: #3b82f6; border: none; border-radius: 10px; color: #fff; padding: 12px 24px; font-size: 14px; font-weight: 500; cursor: pointer; }
+.section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #555; margin: 1rem 0 0.5rem; font-weight: 500; }
 </style>
 </head>
 <body>
 
 <div class="header">
-  <h1>📺 TV Guide</h1>
-  <p id="subtitle">Loading your channels...</p>
+  <div>
+    <h1>📺 TV Guide</h1>
+    <p id="subtitle">Loading...</p>
+  </div>
+  <button class="btn-settings" onclick="openPicker()">⚽ My Sports</button>
 </div>
 
-<div class="stats" id="stats" style="display:none">
-  <div class="stat"><div class="stat-label">Channels</div><div class="stat-value" id="s-channels">0</div></div>
-  <div class="stat"><div class="stat-label">On now</div><div class="stat-value" id="s-now">0</div></div>
-  <div class="stat"><div class="stat-label">Sport now</div><div class="stat-value" id="s-sport">0</div></div>
+<!-- Sport picker overlay -->
+<div class="overlay" id="overlay">
+  <div class="overlay-header">
+    <div>
+      <h2>Pick your sports</h2>
+      <p>We'll show you what's on live for these</p>
+    </div>
+  </div>
+  <div class="sport-grid" id="sport-grid"></div>
+  <div class="overlay-footer">
+    <button class="btn-save" onclick="saveSports()">Save my sports</button>
+  </div>
 </div>
 
-<div class="controls" id="controls" style="display:none">
-  <button class="tab active" onclick="setTab(this,'all')">All</button>
-  <button class="tab" onclick="setTab(this,'now')">On now</button>
-  <button class="tab" onclick="setTab(this,'sport')">Sport</button>
-  <button class="tab" onclick="setTab(this,'english')">English</button>
+<div class="tabs" id="tabs" style="display:none">
+  <button class="tab active" onclick="setTab(this,'my')">My Sports</button>
+  <button class="tab" onclick="setTab(this,'now')">All On Now</button>
+  <button class="tab" onclick="setTab(this,'all')">All Channels</button>
+</div>
+
+<div class="search-bar" id="search-bar" style="display:none">
   <input type="text" id="search" placeholder="Search channels or shows..." oninput="render()" />
-  <select id="lang" onchange="render()"><option value="">All languages</option></select>
 </div>
 
 <div class="channel-list" id="channel-list">
-  <div class="status-msg" id="loading-msg">Loading EPG data...</div>
+  <div class="status-msg">Loading EPG data...</div>
 </div>
 
 <script>
 const SERVER = 'https://epg-app-production.up.railway.app';
-const SPORT = ['sport','football','soccer','cricket','nrl','afl','nba','nfl','rugby','tennis','golf','racing','f1','boxing','ufc','mma','league','premier','champions','serie','bundesliga','ligue','grand prix','supercars','basketball','baseball','hockey','cycling','athletics','olympic','netball'];
+const SPORTS = [
+  { id: 'soccer', name: 'Soccer', emoji: '⚽', keywords: ['soccer','football','premier','champions','la liga','bundesliga','serie a','ligue','epl','fa cup','mls','world cup','euro'] },
+  { id: 'nrl', name: 'NRL', emoji: '🏉', keywords: ['nrl','rugby league','state of origin'] },
+  { id: 'rugby_union', name: 'Rugby Union', emoji: '🏈', keywords: ['rugby union','super rugby','six nations','rugby world'] },
+  { id: 'afl', name: 'AFL', emoji: '🦘', keywords: ['afl','aussie rules'] },
+  { id: 'cricket', name: 'Cricket', emoji: '🏏', keywords: ['cricket','ashes','test match','ipl','big bash'] },
+  { id: 'nba', name: 'NBA', emoji: '🏀', keywords: ['nba','basketball'] },
+  { id: 'nfl', name: 'NFL', emoji: '🏈', keywords: ['nfl','american football','super bowl'] },
+  { id: 'tennis', name: 'Tennis', emoji: '🎾', keywords: ['tennis','wimbledon','us open','australian open','french open','atp','wta'] },
+  { id: 'golf', name: 'Golf', emoji: '⛳', keywords: ['golf','pga','masters','open championship','ryder cup'] },
+  { id: 'f1', name: 'Formula 1', emoji: '🏎️', keywords: ['formula 1','f1','grand prix','motogp'] },
+  { id: 'boxing', name: 'Boxing / MMA', emoji: '🥊', keywords: ['boxing','ufc','mma','fight'] },
+  { id: 'ice_hockey', name: 'Ice Hockey', emoji: '🏒', keywords: ['ice hockey','nhl','hockey'] },
+  { id: 'baseball', name: 'Baseball', emoji: '⚾', keywords: ['baseball','mlb'] },
+  { id: 'cycling', name: 'Cycling', emoji: '🚴', keywords: ['cycling','tour de france','velodrome'] },
+  { id: 'racing', name: 'Motorsport', emoji: '🏁', keywords: ['supercars','v8','motorsport','nascar','indycar'] },
+  { id: 'olympic', name: 'Olympics', emoji: '🏅', keywords: ['olympic','commonwealth games','athletics'] },
+];
 
-let channels = [], tab = 'all', shown = 20, attempt = 0;
+let channels = [], tab = 'my', shown = 20;
+let favSports = JSON.parse(localStorage.getItem('favSports') || '[]');
 
-function isSport(ch) {
-  const n = (ch.name || '').toLowerCase();
-  if (SPORT.some(k => n.includes(k))) return true;
-  const titles = [(ch.now||{}).title, ...((ch.next||[]).map(p=>p.title))].filter(Boolean).join(' ').toLowerCase();
-  return SPORT.some(k => titles.includes(k));
+function openPicker() {
+  const grid = document.getElementById('sport-grid');
+  grid.innerHTML = SPORTS.map(s => `
+    <div class="sport-card ${favSports.includes(s.id) ? 'selected' : ''}" onclick="toggleSport('${s.id}', this)">
+      <div class="emoji">${s.emoji}</div>
+      <div class="name">${s.name}</div>
+    </div>
+  `).join('');
+  document.getElementById('overlay').classList.add('active');
+}
+
+function toggleSport(id, el) {
+  if (favSports.includes(id)) {
+    favSports = favSports.filter(s => s !== id);
+    el.classList.remove('selected');
+  } else {
+    favSports.push(id);
+    el.classList.add('selected');
+  }
+}
+
+function saveSports() {
+  localStorage.setItem('favSports', JSON.stringify(favSports));
+  document.getElementById('overlay').classList.remove('active');
+  render();
+}
+
+function getSportMatch(ch) {
+  const text = [ch.name, (ch.now||{}).title, ...((ch.next||[]).map(p=>p.title))].filter(Boolean).join(' ').toLowerCase();
+  return SPORTS.filter(s => s.keywords.some(k => text.includes(k)));
+}
+
+function isFavSport(ch) {
+  if (!favSports.length) return false;
+  const matched = getSportMatch(ch);
+  return matched.some(s => favSports.includes(s.id));
 }
 
 function fmt(raw) {
@@ -95,22 +178,20 @@ function setTab(el, t) {
   tab = t; shown = 20;
   document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
   el.classList.add('active');
+  document.getElementById('search-bar').style.display = t === 'all' ? 'block' : 'none';
   render();
 }
 
 function filtered() {
-  const q = (document.getElementById('search').value || '').toLowerCase();
-  const lang = document.getElementById('lang').value;
+  const q = (document.getElementById('search')?.value || '').toLowerCase();
   return channels.filter(ch => {
-    if (tab === 'now' && !ch.now) return false;
-    if (tab === 'sport' && !isSport(ch)) return false;
-    if (tab === 'english') { const l = (ch.lang||'').toLowerCase(); if (l && l !== 'en' && l !== 'english') return false; }
-    if (lang && ch.lang !== lang) return false;
+    if (tab === 'my') return ch.now && isFavSport(ch);
+    if (tab === 'now') return ch.now;
     if (q) {
       const nm = (ch.name||'').toLowerCase().includes(q);
       const np = ((ch.now||{}).title||'').toLowerCase().includes(q);
-      const nx = (ch.next||[]).some(p => (p.title||'').toLowerCase().includes(q));
-      if (!nm && !np && !nx) return false;
+      const nx = (ch.next||[]).some(p=>(p.title||'').toLowerCase().includes(q));
+      if (!nm&&!np&&!nx) return false;
     }
     return true;
   });
@@ -119,16 +200,37 @@ function filtered() {
 function render() {
   const list = filtered();
   const el = document.getElementById('channel-list');
+
+  if (tab === 'my' && !favSports.length) {
+    el.innerHTML = `<div class="empty-fav">
+      <h3>Pick your sports</h3>
+      <p>Tell us what you watch and we'll show you what's on live right now.</p>
+      <button onclick="openPicker()">Choose my sports</button>
+    </div>`;
+    return;
+  }
+
+  if (tab === 'my' && !list.length) {
+    el.innerHTML = `<div class="empty-fav">
+      <h3>Nothing on right now</h3>
+      <p>None of your sports are currently live. Check back later or browse All On Now.</p>
+      <button onclick="openPicker()">Update my sports</button>
+    </div>`;
+    return;
+  }
+
   if (!list.length) { el.innerHTML = '<div class="status-msg">No channels match.</div>'; return; }
-  const slice = list.slice(0, shown);
-  el.innerHTML = slice.map(ch => {
-    const sport = isSport(ch);
+
+  const toShow = list.slice(0, shown);
+  el.innerHTML = toShow.map(ch => {
+    const sports = getSportMatch(ch);
+    const sportBadge = sports.length ? `<span class="badge-sport">${sports[0].emoji} ${sports[0].name}</span>` : '';
     const logo = ch.logo
       ? `<img class="logo" src="${ch.logo}" alt="" onerror="this.style.display='none';this.nextSibling.style.display='flex'" /><div class="logo-placeholder" style="display:none">${(ch.name||'').slice(0,3)}</div>`
       : `<div class="logo-placeholder">${(ch.name||'').slice(0,3)}</div>`;
     let ph = '';
     if (ch.now) {
-      ph += `<div class="programme"><div class="prog-time">${fmt(ch.now.startRaw)}</div><div style="flex:1"><div class="prog-title">${ch.now.title}<span class="badge-now">Now</span>${sport?'<span class="badge-sport">Sport</span>':''}</div>${ch.now.desc?`<div class="prog-desc">${ch.now.desc}</div>`:''}<div class="progress-wrap"><div class="progress-bar" style="width:${ch.now.pct}%"></div></div></div></div>`;
+      ph += `<div class="programme"><div class="prog-time">${fmt(ch.now.startRaw)}</div><div style="flex:1"><div class="prog-title">${ch.now.title}<span class="badge-now">Now</span>${sportBadge}</div>${ch.now.desc?`<div class="prog-desc">${ch.now.desc}</div>`:''}<div class="progress-wrap"><div class="progress-bar" style="width:${ch.now.pct}%"></div></div></div></div>`;
     }
     (ch.next||[]).forEach(p => {
       ph += `<div class="programme"><div class="prog-time">${fmt(p.startRaw)}</div><div style="flex:1"><div class="prog-title">${p.title}</div>${p.desc?`<div class="prog-desc">${p.desc}</div>`:''}</div></div>`;
@@ -136,8 +238,9 @@ function render() {
     if (!ch.now && !(ch.next||[]).length) {
       ph = `<div class="programme"><div class="prog-time">—</div><div class="prog-title" style="color:#444">No schedule data</div></div>`;
     }
-    return `<div class="channel-card"><div class="channel-header">${logo}<div><div class="channel-name">${ch.name}</div><div class="channel-meta">${[ch.lang,ch.group].filter(Boolean).join(' · ')}</div></div></div>${ph}</div>`;
+    return `<div class="channel-card"><div class="channel-header">${logo}<div><div class="channel-name">${ch.name}</div><div class="channel-meta">${ch.lang||''}</div></div></div>${ph}</div>`;
   }).join('');
+
   const old = document.getElementById('load-more');
   if (old) old.remove();
   if (list.length > shown) {
@@ -146,33 +249,25 @@ function render() {
     btn.className = 'load-more-btn';
     btn.textContent = `Show more (${list.length - shown} remaining)`;
     btn.onclick = () => { shown += 20; render(); };
-    document.getElementById('channel-list').appendChild(btn);
+    el.appendChild(btn);
   }
 }
 
 async function load() {
   try {
-    attempt++;
-    document.getElementById('subtitle').textContent = attempt > 1 ? `Still loading... (attempt ${attempt})` : 'Loading your channels...';
     const res = await fetch(SERVER + '/guide');
     if (res.status === 503) {
-      document.getElementById('subtitle').textContent = 'EPG loading on server, retrying in 15 seconds...';
+      document.getElementById('subtitle').textContent = 'Loading EPG, retrying...';
       setTimeout(load, 15000);
       return;
     }
     if (!res.ok) throw new Error('Server returned ' + res.status);
     channels = await res.json();
-    const onNow = channels.filter(ch => ch.now);
-    const sportNow = channels.filter(ch => isSport(ch));
-    const langs = [...new Set(channels.map(c => c.lang).filter(Boolean))].sort();
-    const sel = document.getElementById('lang');
-    langs.forEach(l => { const o = document.createElement('option'); o.value = l; o.textContent = l; sel.appendChild(o); });
-    document.getElementById('s-channels').textContent = channels.length;
-    document.getElementById('s-now').textContent = onNow.length;
-    document.getElementById('s-sport').textContent = sportNow.length;
-    document.getElementById('stats').style.display = 'flex';
-    document.getElementById('controls').style.display = 'flex';
     document.getElementById('subtitle').textContent = channels.length.toLocaleString() + ' channels loaded';
+    document.getElementById('tabs').style.display = 'flex';
+    if (!favSports.length) {
+      setTimeout(openPicker, 500);
+    }
     render();
   } catch(e) {
     document.getElementById('channel-list').innerHTML = `<div class="error-msg"><strong>Could not load EPG</strong><br><br>Error: ${e.message}</div>`;
