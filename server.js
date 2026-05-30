@@ -140,7 +140,7 @@ async function fetchESPNFixtures() {
         isLive: state === 'in',
         isUpcoming: state === 'pre',
         isFinished: state === 'post',
-        fixtureKey: (home && away) ? `${home.toLowerCase()}__${away.toLowerCase()}` : `event__${event.id}`,
+        fixtureKey: (home && away) ? `${home.toLowerCase()}__${away.toLowerCase()}` : null,
       });
     }
   }
