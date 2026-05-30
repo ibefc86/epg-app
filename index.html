@@ -198,25 +198,8 @@ function normaliseTitle(title) {
     .trim();
 }
 function classifyUpcoming(prog) {
-  if (!prog || isNonLiveClient(prog.title)) return null;
-  const t = prog.title.toLowerCase().replace(/^[^:]+:\s*/, '');
-  for (const fix of upcomingFixtures) {
-    if (fix.name && fix.name.length > 5 && t.includes(fix.name.slice(0, 20))) return fix;
-    if (fix.home && fix.away) {
-      const homeWords = fix.home.split(' ').filter(w => w.length >= 4);
-      const awayWords = fix.away.split(' ').filter(w => w.length >= 4);
-      if (homeWords.length && awayWords.length) {
-        if (homeWords.some(w => t.includes(w)) && awayWords.some(w => t.includes(w))) return fix;
-      }
-    }
-    if (fix.name && fix.name.length > 5) {
-      const fixWords = fix.name.split(' ').filter(w => w.length >= 6);
-      const tClean = t.replace(/dp world tour|pga tour|golf|day \d+|live|round \d+/g, '').trim();
-      const tWords = tClean.split(/[\s,]+/).filter(w => w.length >= 6);
-      if (tWords.length >= 2 && tWords.every(w => fix.name.includes(w))) return fix;
-    }
-  }
-  return null;
+  if (!prog || !prog.sport) return null;
+  return prog.sport;
 }
 
 function isNonLiveClient(title) {
@@ -230,15 +213,13 @@ function groupUpcoming(channels, favSports) {
   const groups = {};
   for (const ch of channels) {
     for (const prog of (ch.upcoming || [])) {
-      const sport = classifyUpcoming(prog);
-      if (!sport) continue;
-      if (favSports.length && !favSports.includes(sport.sportId)) continue;
-      const key = normaliseTitle(prog.title).toLowerCase();
-      const fixtureKey = sport.fixtureKey || key;
-      if (!groups[fixtureKey]) {
-        groups[fixtureKey] = {
-          title: sport.displayName || normaliseTitle(prog.title),
-          sport: { sportId: sport.sportId, emoji: sport.emoji },
+      if (!prog.sport) continue;
+      if (favSports.length && !favSports.includes(prog.sport.sportId)) continue;
+      const key = prog.fixtureKey || normaliseTitle(prog.title).toLowerCase();
+      if (!groups[key]) {
+        groups[key] = {
+          title: prog.displayName || normaliseTitle(prog.title),
+          sport: prog.sport,
           isLive: false,
           pct: 0,
           startRaw: prog.startRaw,
@@ -246,11 +227,11 @@ function groupUpcoming(channels, favSports) {
           channels: []
         };
       }
-      if (!groups[fixtureKey].channels.find(c => c.id === ch.id)) {
-        groups[fixtureKey].channels.push(ch);
+      if (!groups[key].channels.find(c => c.id === ch.id)) {
+        groups[key].channels.push(ch);
       }
-      if (!groups[fixtureKey].startRaw || prog.startRaw < groups[fixtureKey].startRaw) {
-        groups[fixtureKey].startRaw = prog.startRaw;
+      if (!groups[key].startRaw || prog.startRaw < groups[key].startRaw) {
+        groups[key].startRaw = prog.startRaw;
       }
     }
   }
