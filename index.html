@@ -63,15 +63,14 @@ input::placeholder { color: #555; }
 </div>
 
 <div class="channel-list" id="channel-list">
-  <div class="status-msg">Loading EPG data... this takes 20-30 seconds on first load.</div>
+  <div class="status-msg" id="loading-msg">Loading EPG data...</div>
 </div>
 
 <script>
-const EPG = 'https://305.halfvex.com/xmltv.php?username=ib123&password=gP4HRjkXrc';
 const SERVER = 'https://epg-app-production.up.railway.app';
 const SPORT = ['sport','football','soccer','cricket','nrl','afl','nba','nfl','rugby','tennis','golf','racing','f1','boxing','ufc','mma','league','premier','champions','serie','bundesliga','ligue','grand prix','supercars','basketball','baseball','hockey','cycling','athletics','olympic','netball'];
 
-let channels = [], tab = 'all', shown = 20;
+let channels = [], tab = 'all', shown = 20, attempt = 0;
 
 function isSport(ch) {
   const n = (ch.name || '').toLowerCase();
@@ -129,35 +128,16 @@ function render() {
       : `<div class="logo-placeholder">${(ch.name||'').slice(0,3)}</div>`;
     let ph = '';
     if (ch.now) {
-      ph += `<div class="programme">
-        <div class="prog-time">${fmt(ch.now.startRaw)}</div>
-        <div style="flex:1">
-          <div class="prog-title">${ch.now.title}<span class="badge-now">Now</span>${sport?'<span class="badge-sport">Sport</span>':''}</div>
-          ${ch.now.desc ? `<div class="prog-desc">${ch.now.desc}</div>` : ''}
-          <div class="progress-wrap"><div class="progress-bar" style="width:${ch.now.pct}%"></div></div>
-        </div>
-      </div>`;
+      ph += `<div class="programme"><div class="prog-time">${fmt(ch.now.startRaw)}</div><div style="flex:1"><div class="prog-title">${ch.now.title}<span class="badge-now">Now</span>${sport?'<span class="badge-sport">Sport</span>':''}</div>${ch.now.desc?`<div class="prog-desc">${ch.now.desc}</div>`:''}<div class="progress-wrap"><div class="progress-bar" style="width:${ch.now.pct}%"></div></div></div></div>`;
     }
     (ch.next||[]).forEach(p => {
-      ph += `<div class="programme">
-        <div class="prog-time">${fmt(p.startRaw)}</div>
-        <div style="flex:1">
-          <div class="prog-title">${p.title}</div>
-          ${p.desc ? `<div class="prog-desc">${p.desc}</div>` : ''}
-        </div>
-      </div>`;
+      ph += `<div class="programme"><div class="prog-time">${fmt(p.startRaw)}</div><div style="flex:1"><div class="prog-title">${p.title}</div>${p.desc?`<div class="prog-desc">${p.desc}</div>`:''}</div></div>`;
     });
     if (!ch.now && !(ch.next||[]).length) {
       ph = `<div class="programme"><div class="prog-time">—</div><div class="prog-title" style="color:#444">No schedule data</div></div>`;
     }
-    return `<div class="channel-card">
-      <div class="channel-header">${logo}
-        <div><div class="channel-name">${ch.name}</div>
-        <div class="channel-meta">${[ch.lang, ch.group].filter(Boolean).join(' · ')}</div></div>
-      </div>${ph}
-    </div>`;
+    return `<div class="channel-card"><div class="channel-header">${logo}<div><div class="channel-name">${ch.name}</div><div class="channel-meta">${[ch.lang,ch.group].filter(Boolean).join(' · ')}</div></div></div>${ph}</div>`;
   }).join('');
-
   const old = document.getElementById('load-more');
   if (old) old.remove();
   if (list.length > shown) {
@@ -172,7 +152,14 @@ function render() {
 
 async function load() {
   try {
-    const res = await fetch(SERVER + '/guide?url=' + encodeURIComponent(EPG));
+    attempt++;
+    document.getElementById('subtitle').textContent = attempt > 1 ? `Still loading... (attempt ${attempt})` : 'Loading your channels...';
+    const res = await fetch(SERVER + '/guide');
+    if (res.status === 503) {
+      document.getElementById('subtitle').textContent = 'EPG loading on server, retrying in 15 seconds...';
+      setTimeout(load, 15000);
+      return;
+    }
     if (!res.ok) throw new Error('Server returned ' + res.status);
     channels = await res.json();
     const onNow = channels.filter(ch => ch.now);
