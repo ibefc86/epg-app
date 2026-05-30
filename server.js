@@ -28,7 +28,6 @@ const ESPN_LEAGUES = [
   { id: 'f1',          url: `${ESPN_BASE}/racing/f1/scoreboard`,                emoji: '🏎️' },
 ];
 
-// Map ESPN league IDs to our sport IDs
 const LEAGUE_TO_SPORT = {
   nrl: 'nrl', afl: 'afl', nba: 'nba', nfl: 'nfl', nhl: 'ice_hockey',
   mlb: 'baseball', soccer_epl: 'soccer', soccer_ucl: 'soccer',
@@ -44,7 +43,7 @@ app.use((req, res, next) => {
 app.use(express.static(path.join(__dirname)));
 
 let cache = null;
-let fixtureCache = []; // { sportId, emoji, home, away, name, isLive, isUpcoming }
+let fixtureCache = [];
 
 function parseDate(s) {
   if (!s) return null;
@@ -169,21 +168,32 @@ function matchFixture(title) {
   for (const fix of fixtureCache) {
     // Match full event name
     if (fix.name && fix.name.length > 5 && t.includes(fix.name.slice(0, 20))) return fix;
-    // Match "Home vs Away" pattern with team names
+
+    // Match any word from home AND any word from away (4+ chars)
     if (fix.home && fix.away) {
-      const homeWord = fix.home.split(' ').slice(-1)[0]; // last word of team name e.g. "Storm"
-      const awayWord = fix.away.split(' ').slice(-1)[0];
-      if (homeWord.length > 3 && awayWord.length > 3 && t.includes(homeWord) && t.includes(awayWord)) return fix;
+      const homeWords = fix.home.split(' ').filter(w => w.length >= 4);
+      const awayWords = fix.away.split(' ').filter(w => w.length >= 4);
+      if (homeWords.length && awayWords.length) {
+        const homeMatch = homeWords.some(w => t.includes(w));
+        const awayMatch = awayWords.some(w => t.includes(w));
+        if (homeMatch && awayMatch) return fix;
+      }
     }
-    // Match short names
-    if (fix.homeShort && fix.awayShort && fix.homeShort.length > 3 && fix.awayShort.length > 3) {
-      if (t.includes(fix.homeShort) && t.includes(fix.awayShort)) return fix;
+
+    // Match short display names
+    if (fix.homeShort && fix.awayShort) {
+      const homeWords = fix.homeShort.split(' ').filter(w => w.length >= 4);
+      const awayWords = fix.awayShort.split(' ').filter(w => w.length >= 4);
+      if (homeWords.length && awayWords.length) {
+        const homeMatch = homeWords.some(w => t.includes(w));
+        const awayMatch = awayWords.some(w => t.includes(w));
+        if (homeMatch && awayMatch) return fix;
+      }
     }
   }
   return null;
 }
 
-// Fallback keyword sport detection for things ESPN doesn't cover
 const SPORT_KEYWORDS = {
   cricket:     ['cricket','ashes','test match','ipl','indian premier league','big bash','t20','one-day','county cricket','icc','twenty20'],
   rugby_union: ['rugby union','super rugby','six nations','premiership rugby','united rugby'],
@@ -206,10 +216,8 @@ function keywordSport(title) {
 
 function classifyProgramme(title) {
   if (!title || isNonLive(title)) return null;
-  // Try ESPN fixture match first
   const fix = matchFixture(title);
   if (fix) return { sportId: fix.sportId, emoji: fix.emoji, isLive: fix.isLive };
-  // Fall back to keywords for sports ESPN doesn't cover well
   const kw = keywordSport(title);
   if (kw) return { sportId: kw.sportId, emoji: kw.emoji, isLive: false };
   return null;
