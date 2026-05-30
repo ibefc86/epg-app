@@ -270,11 +270,10 @@ async function refreshFixtures() {
 
 async function refresh() {
   try {
-    console.log('Fetching fixtures and EPG in parallel...');
-    const [, epgText] = await Promise.all([
-      fetchESPNFixtures(),
-      axios.get(EPG_URL, { timeout: 120000, responseType: 'text' }).then(r => r.data)
-    ]);
+    console.log('Fetching fixtures first...');
+    await fetchESPNFixtures();
+    console.log('Fetching EPG...');
+    const epgText = await axios.get(EPG_URL, { timeout: 120000, responseType: 'text' }).then(r => r.data);
 
     console.log('Parsing EPG XML...');
     const xml = new DOMParser().parseFromString(epgText, 'text/xml');
