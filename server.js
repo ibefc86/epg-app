@@ -297,8 +297,15 @@ const upcoming = progs.filter(p => p.start > now && p.start < in24h);
           title: p.title, desc: p.desc.slice(0, 100), startRaw: p.startRaw
         })),
         upcoming: upcoming.filter(p => !isNonLive(p.title)).map(p => {
-          const upcomingClassified = classifyProgramme(p.title);
-          if (!upcomingClassified) return null;
+          const fix = matchFixture(p.title);
+          if (!fix || !fix.isUpcoming) return null;
+          const upcomingClassified = {
+            sportId: fix.sportId,
+            emoji: fix.emoji,
+            isLive: false,
+            fixtureKey: fix.fixtureKey,
+            displayName: fix.displayName,
+          };
           return {
             title: p.title, desc: p.desc.slice(0, 100), startRaw: p.startRaw,
             sport: upcomingClassified,
