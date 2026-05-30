@@ -246,6 +246,7 @@ function keywordSport(title) {
     if (kws.some(k => t.includes(k))) {
       const EMOJI = { cricket:'🏏', rugby_union:'🏆', golf:'⛳', cycling:'🚴', racing:'🏁', olympic:'🏅', tennis:'🎾', boxing:'🥊', nrl:'🏉', afl:'🦘', soccer:'⚽', nba:'🏀', nfl:'🏈', nhl:'🏒', mlb:'⚾' };
       return { sportId: id, emoji: EMOJI[id] || '🏟️', isLive: true, fixtureKey: null, displayName: null };
+    }
   }
   // Detect superscript live characters used by EPG providers
   if (/[\u1D00-\u1DBF\u02B0-\u02FF]/.test(title)) {
