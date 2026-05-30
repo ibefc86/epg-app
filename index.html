@@ -87,7 +87,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #
 <div class="header">
   <div>
     <h1>📺 TV Guide</h1>
-    <p id="subtitle">Loading...</p>
+    <p id="subtitle">Loading... · <span id="clock"></span></p>
   </div>
   <button class="btn-settings" onclick="openPicker()">⚽ My Sports</button>
 </div>
@@ -447,6 +447,9 @@ async function load() {
   }
 }
 
+setInterval(()=>{
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit',timeZone:'Australia/Sydney',hour12:true});
+},1000);
 load();
 </script>
 </body>
