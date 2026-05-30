@@ -154,10 +154,11 @@ async function fetchESPNFixtures() {
 }
 
 const NON_LIVE = [
-  'highlights','replay','classic','documentary','news','magazine',
+  'highlights','highlight',' hl ',': hl','documentary','news','magazine',
   'preview','analysis','best of','greatest','history of',
   'end of transmission','test card','review','the loop',
-  'extended','wrap','teleshopping','sport today','sportscenter'
+  'extended','wrap','teleshopping','sport today','sportscenter',
+  'classic','replay','blitz','compilation'
 ];
 
 function isNonLive(title) {
