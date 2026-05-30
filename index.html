@@ -241,7 +241,7 @@ function groupUpcoming(channels, favSports) {
       if (!groups[key].channels.find(c => c.id === ch.id)) {
         groups[key].channels.push(ch);
       }
-      if (!groups[key].startRaw || prog.startRaw < groups[key].startRaw) {
+      if (!groups[key].startRaw) {
         groups[key].startRaw = prog.startRaw;
       }
     }
