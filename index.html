@@ -68,6 +68,7 @@ input::placeholder { color: #555; }
 
 <script>
 const EPG = 'https://305.halfvex.com/xmltv.php?username=ib123&password=gP4HRjkXrc';
+const SERVER = 'https://epg-app-production.up.railway.app';
 const SPORT = ['sport','football','soccer','cricket','nrl','afl','nba','nfl','rugby','tennis','golf','racing','f1','boxing','ufc','mma','league','premier','champions','serie','bundesliga','ligue','grand prix','supercars','basketball','baseball','hockey','cycling','athletics','olympic','netball'];
 
 let channels = [], tab = 'all', shown = 20;
@@ -171,7 +172,7 @@ function render() {
 
 async function load() {
   try {
-    const res = await fetch('http://localhost:3001/guide?url=' + encodeURIComponent(EPG));
+    const res = await fetch(SERVER + '/guide?url=' + encodeURIComponent(EPG));
     if (!res.ok) throw new Error('Server returned ' + res.status);
     channels = await res.json();
     const onNow = channels.filter(ch => ch.now);
@@ -187,7 +188,7 @@ async function load() {
     document.getElementById('subtitle').textContent = channels.length.toLocaleString() + ' channels loaded';
     render();
   } catch(e) {
-    document.getElementById('channel-list').innerHTML = `<div class="error-msg"><strong>Could not load EPG</strong><br><br>Make sure your server is running in Terminal (node server.js)<br><br>Error: ${e.message}</div>`;
+    document.getElementById('channel-list').innerHTML = `<div class="error-msg"><strong>Could not load EPG</strong><br><br>Error: ${e.message}</div>`;
   }
 }
 
