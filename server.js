@@ -3,6 +3,7 @@ const axios = require('axios');
 const path = require('path');
 const { DOMParser } = require('@xmldom/xmldom');
 const app = express();
+const PORT = process.env.PORT || 3001;
 
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
@@ -45,12 +46,7 @@ app.get('/guide', async (req, res) => {
       const stopRaw = p.getAttribute('stop');
       const start = parseDate(startRaw);
       const stop = parseDate(stopRaw);
-      return {
-        channel: p.getAttribute('channel'),
-        start, stop, startRaw,
-        title: p.getElementsByTagName('title')[0]?.textContent || '',
-        desc: p.getElementsByTagName('desc')[0]?.textContent || ''
-      };
+      return { channel: p.getAttribute('channel'), start, stop, startRaw, title: p.getElementsByTagName('title')[0]?.textContent || '', desc: p.getElementsByTagName('desc')[0]?.textContent || '' };
     }).filter(p => p.start && p.stop);
 
     const progsByChannel = {};
@@ -78,4 +74,4 @@ app.get('/guide', async (req, res) => {
   }
 });
 
-app.listen(3001, () => console.log('EPG server running at http://localhost:3001'));
+app.listen(PORT, () => console.log('EPG server running on port ' + PORT));
