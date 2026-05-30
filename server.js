@@ -6,23 +6,36 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 const EPG_URL = 'https://305.halfvex.com/xmltv.php?username=ib123&password=gP4HRjkXrc';
-const SPORTSDB_KEY = '123';
+const ESPN_BASE = 'https://site.api.espn.com/apis/site/v2/sports';
 
-const SPORT_MAP = [
-  { id: 'soccer',      sdbName: 'Soccer',          emoji: '⚽' },
-  { id: 'cricket',     sdbName: 'Cricket',          emoji: '🏏' },
-  { id: 'nrl',         sdbName: 'Rugby League',     emoji: '🏉' },
-  { id: 'rugby_union', sdbName: 'Rugby Union',      emoji: '🏆' },
-  { id: 'afl',         sdbName: 'Australian Rules', emoji: '🦘' },
-  { id: 'nba',         sdbName: 'Basketball',       emoji: '🏀' },
-  { id: 'nfl',         sdbName: 'American Football', emoji: '🏈' },
-  { id: 'tennis',      sdbName: 'Tennis',           emoji: '🎾' },
-  { id: 'golf',        sdbName: 'Golf',             emoji: '⛳' },
-  { id: 'f1',          sdbName: 'Motorsport',       emoji: '🏎️' },
-  { id: 'boxing',      sdbName: 'Boxing',           emoji: '🥊' },
-  { id: 'ice_hockey',  sdbName: 'Ice Hockey',       emoji: '🏒' },
-  { id: 'baseball',    sdbName: 'Baseball',         emoji: '⚾' },
+const ESPN_LEAGUES = [
+  { id: 'nrl',         url: `${ESPN_BASE}/rugby-league/3/scoreboard`,           emoji: '🏉' },
+  { id: 'afl',         url: `${ESPN_BASE}/australian-football/afl/scoreboard`,  emoji: '🦘' },
+  { id: 'nba',         url: `${ESPN_BASE}/basketball/nba/scoreboard`,           emoji: '🏀' },
+  { id: 'nfl',         url: `${ESPN_BASE}/football/nfl/scoreboard`,             emoji: '🏈' },
+  { id: 'nhl',         url: `${ESPN_BASE}/hockey/nhl/scoreboard`,               emoji: '🏒' },
+  { id: 'mlb',         url: `${ESPN_BASE}/baseball/mlb/scoreboard`,             emoji: '⚾' },
+  { id: 'soccer_epl',  url: `${ESPN_BASE}/soccer/eng.1/scoreboard`,             emoji: '⚽' },
+  { id: 'soccer_ucl',  url: `${ESPN_BASE}/soccer/uefa.champions/scoreboard`,    emoji: '⚽' },
+  { id: 'soccer_mls',  url: `${ESPN_BASE}/soccer/usa.1/scoreboard`,             emoji: '⚽' },
+  { id: 'soccer_esp',  url: `${ESPN_BASE}/soccer/esp.1/scoreboard`,             emoji: '⚽' },
+  { id: 'soccer_ger',  url: `${ESPN_BASE}/soccer/ger.1/scoreboard`,             emoji: '⚽' },
+  { id: 'soccer_ita',  url: `${ESPN_BASE}/soccer/ita.1/scoreboard`,             emoji: '⚽' },
+  { id: 'tennis_atp',  url: `${ESPN_BASE}/tennis/atp/scoreboard`,               emoji: '🎾' },
+  { id: 'tennis_wta',  url: `${ESPN_BASE}/tennis/wta/scoreboard`,               emoji: '🎾' },
+  { id: 'golf_pga',    url: `${ESPN_BASE}/golf/pga/scoreboard`,                 emoji: '⛳' },
+  { id: 'mma',         url: `${ESPN_BASE}/mma/ufc/scoreboard`,                  emoji: '🥊' },
+  { id: 'f1',          url: `${ESPN_BASE}/racing/f1/scoreboard`,                emoji: '🏎️' },
 ];
+
+// Map ESPN league IDs to our sport IDs
+const LEAGUE_TO_SPORT = {
+  nrl: 'nrl', afl: 'afl', nba: 'nba', nfl: 'nfl', nhl: 'ice_hockey',
+  mlb: 'baseball', soccer_epl: 'soccer', soccer_ucl: 'soccer',
+  soccer_mls: 'soccer', soccer_esp: 'soccer', soccer_ger: 'soccer',
+  soccer_ita: 'soccer', tennis_atp: 'tennis', tennis_wta: 'tennis',
+  golf_pga: 'golf', mma: 'boxing', f1: 'f1',
+};
 
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
@@ -31,7 +44,7 @@ app.use((req, res, next) => {
 app.use(express.static(path.join(__dirname)));
 
 let cache = null;
-let fixtureCache = [];
+let fixtureCache = []; // { sportId, emoji, home, away, name, isLive, isUpcoming }
 
 function parseDate(s) {
   if (!s) return null;
@@ -91,165 +104,177 @@ function deduplicateChannels(channels) {
   return result;
 }
 
-// Fetch today's fixtures from TheSportsDB
-async function fetchFixtures() {
-  const today = new Date().toISOString().split('T')[0];
+async function fetchESPNFixtures() {
   const fixtures = [];
-  for (const sport of SPORT_MAP) {
-    try {
-      const res = await axios.get(
-        `https://www.thesportsdb.com/api/v1/json/${SPORTSDB_KEY}/eventsday.php?d=${today}&s=${encodeURIComponent(sport.sdbName)}`,
-        { timeout: 10000 }
-      );
-      const events = res.data?.events || [];
-      for (const ev of events) {
-        fixtures.push({
-          sportId: sport.id,
-          sportEmoji: sport.emoji,
-          event: (ev.strEvent || '').toLowerCase(),
-          home: (ev.strHomeTeam || '').toLowerCase(),
-          away: (ev.strAwayTeam || '').toLowerCase(),
-          league: (ev.strLeague || '').toLowerCase(),
-          time: ev.strTime,
-          status: ev.strStatus,
-        });
-      }
-    } catch(e) {
-      console.log(`Failed to fetch ${sport.sdbName} fixtures:`, e.message);
+  const results = await Promise.allSettled(
+    ESPN_LEAGUES.map(league =>
+      axios.get(league.url, { timeout: 10000 })
+        .then(res => ({ league, data: res.data }))
+    )
+  );
+
+  for (const result of results) {
+    if (result.status !== 'fulfilled') continue;
+    const { league, data } = result.value;
+    const events = data?.events || [];
+    const sportId = LEAGUE_TO_SPORT[league.id] || league.id;
+
+    for (const event of events) {
+      const state = event.status?.type?.state;
+      const competitors = event.competitions?.[0]?.competitors || [];
+      const home = competitors.find(c => c.homeAway === 'home')?.team?.displayName || '';
+      const away = competitors.find(c => c.homeAway === 'away')?.team?.displayName || '';
+      const homeShort = competitors.find(c => c.homeAway === 'home')?.team?.shortDisplayName || '';
+      const awayShort = competitors.find(c => c.homeAway === 'away')?.team?.shortDisplayName || '';
+
+      fixtures.push({
+        sportId,
+        emoji: league.emoji,
+        name: (event.name || '').toLowerCase(),
+        shortName: (event.shortName || '').toLowerCase(),
+        home: home.toLowerCase(),
+        away: away.toLowerCase(),
+        homeShort: homeShort.toLowerCase(),
+        awayShort: awayShort.toLowerCase(),
+        isLive: state === 'in',
+        isUpcoming: state === 'pre',
+        isFinished: state === 'post',
+      });
     }
   }
+
   fixtureCache = fixtures;
-  console.log(`Loaded ${fixtures.length} fixtures for today`);
+  const live = fixtures.filter(f => f.isLive).length;
+  console.log(`Loaded ${fixtures.length} fixtures (${live} live) from ESPN`);
 }
 
-// Match a programme title against today's known fixtures
-function matchFixture(title) {
-  if (!title) return null;
-  const t = title.toLowerCase();
-  for (const fix of fixtureCache) {
-    // Direct event name match
-    if (fix.event && t.includes(fix.event.slice(0, 15))) return fix;
-    // Team name match — if both home and away appear in title
-    if (fix.home && fix.away && t.includes(fix.home.split(' ')[0]) && t.includes(fix.away.split(' ')[0])) return fix;
-    // League match with "vs" pattern
-    if (fix.league && t.includes(fix.league.slice(0, 10)) && t.includes(' vs ')) return fix;
-  }
-  return null;
-}
-
-// Fallback keyword sport detection
-const SPORT_KEYWORDS = {
-  soccer: ['premier league','champions league','la liga','bundesliga','serie a','ligue 1','europa league','fa cup','epl','mls','fifa world cup','euro 2024','euro 2026'],
-  cricket: ['cricket','ashes','test match','ipl','indian premier league','big bash','t20','one-day','county cricket','icc'],
-  nrl: ['nrl','rugby league','state of origin'],
-  rugby_union: ['rugby union','super rugby','six nations','premiership rugby'],
-  afl: ['afl','australian football'],
-  nba: ['nba'],
-  nfl: ['nfl','american football','super bowl'],
-  tennis: ['tennis','wimbledon','us open','australian open','french open','roland garros','atp','wta'],
-  golf: ['golf','pga tour','masters','the open','ryder cup','lpga','charles schwab','liv golf'],
-  f1: ['formula 1','formula one','f1','grand prix','motogp'],
-  boxing: ['boxing','ufc','mma','fight night','world title'],
-  ice_hockey: ['ice hockey','nhl'],
-  baseball: ['baseball','mlb'],
-};
-
-const NON_LIVE = ['highlights','replay','classic','documentary','news','magazine','preview','analysis','best of','greatest','history of','end of transmission','test card','review','the loop','extended','wrap','teleshopping'];
+const NON_LIVE = [
+  'highlights','replay','classic','documentary','news','magazine',
+  'preview','analysis','best of','greatest','history of',
+  'end of transmission','test card','review','the loop',
+  'extended','wrap','teleshopping','sport today','sportscenter'
+];
 
 function isNonLive(title) {
   if (!title) return true;
   const t = title.toLowerCase();
+  if (t === 'end of transmission') return true;
   return NON_LIVE.some(w => t.includes(w));
 }
+
+function matchFixture(title) {
+  if (!title) return null;
+  const t = title.toLowerCase();
+
+  for (const fix of fixtureCache) {
+    // Match full event name
+    if (fix.name && fix.name.length > 5 && t.includes(fix.name.slice(0, 20))) return fix;
+    // Match "Home vs Away" pattern with team names
+    if (fix.home && fix.away) {
+      const homeWord = fix.home.split(' ').slice(-1)[0]; // last word of team name e.g. "Storm"
+      const awayWord = fix.away.split(' ').slice(-1)[0];
+      if (homeWord.length > 3 && awayWord.length > 3 && t.includes(homeWord) && t.includes(awayWord)) return fix;
+    }
+    // Match short names
+    if (fix.homeShort && fix.awayShort && fix.homeShort.length > 3 && fix.awayShort.length > 3) {
+      if (t.includes(fix.homeShort) && t.includes(fix.awayShort)) return fix;
+    }
+  }
+  return null;
+}
+
+// Fallback keyword sport detection for things ESPN doesn't cover
+const SPORT_KEYWORDS = {
+  cricket:     ['cricket','ashes','test match','ipl','indian premier league','big bash','t20','one-day','county cricket','icc','twenty20'],
+  rugby_union: ['rugby union','super rugby','six nations','premiership rugby','united rugby'],
+  cycling:     ['cycling','tour de france','giro','vuelta'],
+  racing:      ['supercars','v8','bathurst','nascar'],
+  olympic:     ['olympic','commonwealth games','world championships','athletics'],
+};
 
 function keywordSport(title) {
   if (!title) return null;
   const t = title.toLowerCase();
   for (const [id, kws] of Object.entries(SPORT_KEYWORDS)) {
     if (kws.some(k => t.includes(k))) {
-      const sport = SPORT_MAP.find(s => s.id === id);
-      return sport ? { sportId: id, sportEmoji: sport.emoji } : null;
+      const EMOJI = { cricket:'🏏', rugby_union:'🏆', cycling:'🚴', racing:'🏁', olympic:'🏅' };
+      return { sportId: id, emoji: EMOJI[id] || '🏟️', isLive: false };
     }
   }
   return null;
 }
 
 function classifyProgramme(title) {
-  if (!title || isNonLive(title)) return { sport: null, isLive: false };
-  // Try fixture match first
+  if (!title || isNonLive(title)) return null;
+  // Try ESPN fixture match first
   const fix = matchFixture(title);
-  if (fix) return { sport: { sportId: fix.sportId, sportEmoji: fix.sportEmoji }, isLive: true };
-  // Fall back to keywords
+  if (fix) return { sportId: fix.sportId, emoji: fix.emoji, isLive: fix.isLive };
+  // Fall back to keywords for sports ESPN doesn't cover well
   const kw = keywordSport(title);
-  if (kw) return { sport: kw, isLive: false };
-  return { sport: null, isLive: false };
+  if (kw) return { sportId: kw.sportId, emoji: kw.emoji, isLive: false };
+  return null;
 }
 
 async function refresh() {
   try {
-    // Fetch fixtures and EPG in parallel
-    console.log('Fetching fixtures and EPG...');
-    await Promise.allSettled([
-      fetchFixtures(),
-      (async () => {
-        const response = await axios.get(EPG_URL, { timeout: 120000, responseType: 'text' });
-        console.log('Parsing XML...');
-        const xml = new DOMParser().parseFromString(response.data, 'text/xml');
-        const now = new Date();
-
-        const channels = Array.from(xml.getElementsByTagName('channel')).map(c => ({
-          id: c.getAttribute('id'),
-          name: c.getElementsByTagName('display-name')[0]?.textContent || c.getAttribute('id'),
-          logo: c.getElementsByTagName('icon')[0]?.getAttribute('src') || '',
-          lang: c.getElementsByTagName('display-name')[0]?.getAttribute('lang') || ''
-        }));
-
-        const allProgs = Array.from(xml.getElementsByTagName('programme')).map(p => {
-          const startRaw = p.getAttribute('start');
-          const stopRaw = p.getAttribute('stop');
-          const start = parseDate(startRaw);
-          const stop = parseDate(stopRaw);
-          return {
-            channel: p.getAttribute('channel'),
-            start, stop, startRaw,
-            title: p.getElementsByTagName('title')[0]?.textContent || '',
-            desc: p.getElementsByTagName('desc')[0]?.textContent || ''
-          };
-        }).filter(p => p.start && p.stop);
-
-        const progsByChannel = {};
-        allProgs.forEach(p => {
-          if (!progsByChannel[p.channel]) progsByChannel[p.channel] = [];
-          progsByChannel[p.channel].push(p);
-        });
-
-        const raw = channels.map(ch => {
-          const progs = (progsByChannel[ch.id] || []).sort((a,b) => a.start - b.start);
-          const nowP = progs.find(p => p.start <= now && p.stop > now);
-          const next = progs.filter(p => p.start > now).slice(0, 2);
-          const nowClassified = nowP ? classifyProgramme(nowP.title) : { sport: null, isLive: false };
-          return {
-            ...ch,
-            now: nowP ? {
-              title: nowP.title,
-              desc: nowP.desc.slice(0, 150),
-              startRaw: nowP.startRaw,
-              pct: Math.min(100, Math.round(((now - nowP.start) / (nowP.stop - nowP.start)) * 100)),
-              sport: nowClassified.sport,
-              isLive: nowClassified.isLive,
-            } : null,
-            next: next.filter(p => !isNonLive(p.title)).map(p => ({
-              title: p.title,
-              desc: p.desc.slice(0, 100),
-              startRaw: p.startRaw
-            }))
-          };
-        });
-
-        cache = deduplicateChannels(raw);
-        console.log(`EPG ready — ${raw.length} → ${cache.length} channels`);
-      })()
+    console.log('Fetching fixtures and EPG in parallel...');
+    const [, epgText] = await Promise.all([
+      fetchESPNFixtures(),
+      axios.get(EPG_URL, { timeout: 120000, responseType: 'text' }).then(r => r.data)
     ]);
+
+    console.log('Parsing EPG XML...');
+    const xml = new DOMParser().parseFromString(epgText, 'text/xml');
+    const now = new Date();
+
+    const channels = Array.from(xml.getElementsByTagName('channel')).map(c => ({
+      id: c.getAttribute('id'),
+      name: c.getElementsByTagName('display-name')[0]?.textContent || c.getAttribute('id'),
+      logo: c.getElementsByTagName('icon')[0]?.getAttribute('src') || '',
+      lang: c.getElementsByTagName('display-name')[0]?.getAttribute('lang') || ''
+    }));
+
+    const allProgs = Array.from(xml.getElementsByTagName('programme')).map(p => {
+      const startRaw = p.getAttribute('start');
+      const stopRaw = p.getAttribute('stop');
+      return {
+        channel: p.getAttribute('channel'),
+        start: parseDate(startRaw), stop: parseDate(stopRaw), startRaw,
+        title: p.getElementsByTagName('title')[0]?.textContent || '',
+        desc: p.getElementsByTagName('desc')[0]?.textContent || ''
+      };
+    }).filter(p => p.start && p.stop);
+
+    const progsByChannel = {};
+    allProgs.forEach(p => {
+      if (!progsByChannel[p.channel]) progsByChannel[p.channel] = [];
+      progsByChannel[p.channel].push(p);
+    });
+
+    const raw = channels.map(ch => {
+      const progs = (progsByChannel[ch.id] || []).sort((a,b) => a.start - b.start);
+      const nowP = progs.find(p => p.start <= now && p.stop > now);
+      const next = progs.filter(p => p.start > now).slice(0, 2);
+      const classified = nowP ? classifyProgramme(nowP.title) : null;
+
+      return {
+        ...ch,
+        now: nowP ? {
+          title: nowP.title,
+          desc: nowP.desc.slice(0, 150),
+          startRaw: nowP.startRaw,
+          pct: Math.min(100, Math.round(((now - nowP.start) / (nowP.stop - nowP.start)) * 100)),
+          sport: classified,
+          isLive: classified?.isLive || false,
+        } : null,
+        next: next.filter(p => !isNonLive(p.title)).map(p => ({
+          title: p.title, desc: p.desc.slice(0, 100), startRaw: p.startRaw
+        }))
+      };
+    });
+
+    cache = deduplicateChannels(raw);
+    console.log(`EPG ready — ${raw.length} → ${cache.length} channels`);
   } catch(e) {
     console.error('Refresh failed:', e.message);
   }
@@ -262,7 +287,12 @@ app.get('/guide', (req, res) => {
 });
 
 app.get('/status', (req, res) => {
-  res.json({ ready: !!cache, channels: cache ? cache.length : 0, fixtures: fixtureCache.length });
+  res.json({
+    ready: !!cache,
+    channels: cache ? cache.length : 0,
+    fixtures: fixtureCache.length,
+    live: fixtureCache.filter(f => f.isLive).length
+  });
 });
 
 app.listen(PORT, () => {
