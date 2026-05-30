@@ -169,7 +169,7 @@ function isNonLive(title) {
 
 function matchFixture(title) {
   if (!title) return null;
-  const t = title.toLowerCase();
+  const t = title.toLowerCase().replace(/^[^:]+:\s*/, '');
 
   for (const fix of fixtureCache) {
     if (fix.name && fix.name.length > 5 && t.includes(fix.name.slice(0, 20))) return fix;
