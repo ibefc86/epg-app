@@ -24,6 +24,7 @@ const ESPN_LEAGUES = [
   { id: 'tennis_atp',  url: `${ESPN_BASE}/tennis/atp/scoreboard`,               emoji: '🎾' },
   { id: 'tennis_wta',  url: `${ESPN_BASE}/tennis/wta/scoreboard`,               emoji: '🎾' },
   { id: 'golf_pga',    url: `${ESPN_BASE}/golf/pga/scoreboard`,                 emoji: '⛳' },
+  { id: 'golf_eur',    url: `${ESPN_BASE}/golf/eur/scoreboard`,                 emoji: '⛳' },
   { id: 'mma',         url: `${ESPN_BASE}/mma/ufc/scoreboard`,                  emoji: '🥊' },
   { id: 'f1',          url: `${ESPN_BASE}/racing/f1/scoreboard`,                emoji: '🏎️' },
 ];
