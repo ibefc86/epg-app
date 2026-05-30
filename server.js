@@ -277,8 +277,9 @@ async function refresh() {
     const raw = channels.map(ch => {
       const progs = (progsByChannel[ch.id] || []).sort((a,b) => a.start - b.start);
       const nowP = progs.find(p => p.start <= now && p.stop > now);
-      const in24h = new Date(now.getTime() + 24*60*60*1000);
-const next = progs.filter(p => p.start > now && p.start < in24h);
+     const in24h = new Date(now.getTime() + 24*60*60*1000);
+const next = progs.filter(p => p.start > now && p.start < in24h).slice(0, 2);
+const upcoming = progs.filter(p => p.start > now && p.start < in24h);
       const classified = nowP ? classifyProgramme(nowP.title) : null;
 
       return {
@@ -291,7 +292,10 @@ const next = progs.filter(p => p.start > now && p.start < in24h);
           sport: classified,
           isLive: classified?.isLive || false,
         } : null,
-        next: next.filter(p => !isNonLive(p.title)).map(p => ({
+      next: next.filter(p => !isNonLive(p.title)).map(p => ({
+          title: p.title, desc: p.desc.slice(0, 100), startRaw: p.startRaw
+        })),
+        upcoming: upcoming.filter(p => !isNonLive(p.title)).map(p => ({
           title: p.title, desc: p.desc.slice(0, 100), startRaw: p.startRaw
         }))
       };
