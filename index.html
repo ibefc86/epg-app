@@ -96,23 +96,30 @@ body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #
 const SERVER = 'https://epg-app-production.up.railway.app';
 
 const SPORTS = [
-  { id: 'soccer',      name: 'Soccer',         emoji: '⚽' },
-  { id: 'nrl',         name: 'NRL',            emoji: '🏉' },
-  { id: 'rugby_union', name: 'Rugby Union',    emoji: '🏆' },
-  { id: 'afl',         name: 'AFL',            emoji: '🦘' },
-  { id: 'cricket',     name: 'Cricket',        emoji: '🏏' },
-  { id: 'nba',         name: 'NBA',            emoji: '🏀' },
-  { id: 'nfl',         name: 'NFL',            emoji: '🏈' },
-  { id: 'tennis',      name: 'Tennis',         emoji: '🎾' },
-  { id: 'golf',        name: 'Golf',           emoji: '⛳' },
-  { id: 'f1',          name: 'Formula 1',      emoji: '🏎️' },
-  { id: 'boxing',      name: 'Boxing / MMA',   emoji: '🥊' },
-  { id: 'ice_hockey',  name: 'Ice Hockey',     emoji: '🏒' },
-  { id: 'baseball',    name: 'Baseball',       emoji: '⚾' },
-  { id: 'cycling',     name: 'Cycling',        emoji: '🚴' },
-  { id: 'racing',      name: 'Motorsport',     emoji: '🏁' },
-  { id: 'olympic',     name: 'Olympics',       emoji: '🏅' },
+  { id: 'soccer',      name: 'Soccer',        emoji: '⚽' },
+  { id: 'nrl',         name: 'NRL',           emoji: '🏉' },
+  { id: 'rugby_union', name: 'Rugby Union',   emoji: '🏆' },
+  { id: 'afl',         name: 'AFL',           emoji: '🦘' },
+  { id: 'cricket',     name: 'Cricket',       emoji: '🏏' },
+  { id: 'nba',         name: 'NBA',           emoji: '🏀' },
+  { id: 'nfl',         name: 'NFL',           emoji: '🏈' },
+  { id: 'tennis',      name: 'Tennis',        emoji: '🎾' },
+  { id: 'golf',        name: 'Golf',          emoji: '⛳' },
+  { id: 'f1',          name: 'Formula 1',     emoji: '🏎️' },
+  { id: 'boxing',      name: 'Boxing / MMA',  emoji: '🥊' },
+  { id: 'ice_hockey',  name: 'Ice Hockey',    emoji: '🏒' },
+  { id: 'baseball',    name: 'Baseball',      emoji: '⚾' },
+  { id: 'cycling',     name: 'Cycling',       emoji: '🚴' },
+  { id: 'racing',      name: 'Motorsport',    emoji: '🏁' },
+  { id: 'olympic',     name: 'Olympics',      emoji: '🏅' },
 ];
+
+const SPORT_NAMES = {
+  soccer:'Soccer', nrl:'NRL', rugby_union:'Rugby Union', afl:'AFL',
+  cricket:'Cricket', nba:'NBA', nfl:'NFL', tennis:'Tennis', golf:'Golf',
+  f1:'Formula 1', boxing:'Boxing/MMA', ice_hockey:'Ice Hockey',
+  baseball:'Baseball', cycling:'Cycling', racing:'Motorsport', olympic:'Olympics'
+};
 
 let channels = [], tab = 'my', shown = 20;
 let favSports = JSON.parse(localStorage.getItem('favSports') || '[]');
@@ -189,7 +196,9 @@ function render() {
 
   el.innerHTML = list.slice(0,shown).map(ch => {
     const sport = ch.now?.sport;
-    const sportBadge = sport ? `<span class="badge-sport">${sport.sportEmoji} ${SPORTS.find(s=>s.id===sport.sportId)?.name||sport.sportId}</span>` : '';
+    const sportName = sport ? (SPORT_NAMES[sport.sportId] || sport.sportId) : '';
+    const sportEmoji = sport?.emoji || '';
+    const sportBadge = sport ? `<span class="badge-sport">${sportEmoji} ${sportName}</span>` : '';
     const liveBadge = ch.now?.isLive ? `<span class="badge-live">● Live</span>` : '';
     const logo = ch.logo
       ? `<img class="logo" src="${ch.logo}" alt="" onerror="this.style.display='none';this.nextSibling.style.display='flex'"/><div class="logo-placeholder" style="display:none">${(ch.name||'').slice(0,3)}</div>`
@@ -212,14 +221,18 @@ function render() {
     btn.id='load-more'; btn.className='load-more-btn';
     btn.textContent=`Show more (${list.length-shown} remaining)`;
     btn.onclick=()=>{shown+=20;render();};
-    el.appendChild(btn);
+    document.getElementById('channel-list').appendChild(btn);
   }
 }
 
 async function load() {
   try {
     const res = await fetch(SERVER+'/guide');
-    if (res.status===503) { document.getElementById('subtitle').textContent='Loading EPG, retrying...'; setTimeout(load,15000); return; }
+    if (res.status===503) {
+      document.getElementById('subtitle').textContent='Loading EPG, retrying...';
+      setTimeout(load,15000);
+      return;
+    }
     if (!res.ok) throw new Error('Server returned '+res.status);
     channels = await res.json();
     document.getElementById('subtitle').textContent = channels.length.toLocaleString()+' channels loaded';
