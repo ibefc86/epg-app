@@ -146,6 +146,7 @@ async function fetchESPNFixtures() {
         isUpcoming: state === 'pre',
         isFinished: state === 'post',
         fixtureKey: (home && away) ? `${home.toLowerCase()}__${away.toLowerCase()}` : `tournament__${event.id}`,
+        espnStartTime: event.competitions?.[0]?.date || null,
       });
     }
   }
