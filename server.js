@@ -168,6 +168,22 @@ function isNonLive(title) {
   return NON_LIVE.some(w => t.includes(w));
 }
 
+function matchFixtureStrict(title) {
+  if (!title) return null;
+  const t = title.toLowerCase().replace(/^[^:]+:\s*/, '');
+  for (const fix of fixtureCache) {
+    if (fix.name && fix.name.length > 5 && t.includes(fix.name.slice(0, 20))) return fix;
+    if (fix.home && fix.away) {
+      const homeWords = fix.home.split(' ').filter(w => w.length >= 6);
+      const awayWords = fix.away.split(' ').filter(w => w.length >= 6);
+      if (homeWords.length >= 1 && awayWords.length >= 1) {
+        if (homeWords.some(w => t.includes(w)) && awayWords.some(w => t.includes(w))) return fix;
+      }
+    }
+  }
+  return null;
+}
+
 function matchFixture(title) {
   if (!title) return null;
   const t = title.toLowerCase().replace(/^[^:]+:\s*/, '');
@@ -297,7 +313,7 @@ const upcoming = progs.filter(p => p.start > now && p.start < in24h);
           title: p.title, desc: p.desc.slice(0, 100), startRaw: p.startRaw
         })),
         upcoming: upcoming.filter(p => !isNonLive(p.title)).map(p => {
-          const fix = matchFixture(p.title);
+          const fix = matchFixtureStrict(p.title);
           if (!fix || !fix.isUpcoming) return null;
           const upcomingClassified = {
             sportId: fix.sportId,
