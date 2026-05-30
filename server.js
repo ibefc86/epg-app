@@ -277,7 +277,8 @@ async function refresh() {
     const raw = channels.map(ch => {
       const progs = (progsByChannel[ch.id] || []).sort((a,b) => a.start - b.start);
       const nowP = progs.find(p => p.start <= now && p.stop > now);
-      const next = progs.filter(p => p.start > now).slice(0, 2);
+      const in24h = new Date(now.getTime() + 24*60*60*1000);
+const next = progs.filter(p => p.start > now && p.start < in24h);
       const classified = nowP ? classifyProgramme(nowP.title) : null;
 
       return {
