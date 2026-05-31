@@ -9,55 +9,42 @@ const EPG_URL = 'https://305.halfvex.com/xmltv.php?username=ib123&password=gP4HR
 const ESPN_BASE = 'https://site.api.espn.com/apis/site/v2/sports';
 
 const ESPN_LEAGUES = [
-  // Rugby League
-  { id: 'nrl',              url: `${ESPN_BASE}/rugby-league/3/scoreboard`,                emoji: '🏉' },
-  // Rugby Union
-  { id: 'rugby_union_sr',   url: `${ESPN_BASE}/rugby-union/267/scoreboard`,               emoji: '🏆' },
-  { id: 'rugby_union_6n',   url: `${ESPN_BASE}/rugby-union/180/scoreboard`,               emoji: '🏆' },
-  { id: 'rugby_union_rc',   url: `${ESPN_BASE}/rugby-union/272/scoreboard`,               emoji: '🏆' },
-  { id: 'rugby_union_pre',  url: `${ESPN_BASE}/rugby-union/269/scoreboard`,               emoji: '🏆' },
-  { id: 'rugby_union_urc',  url: `${ESPN_BASE}/rugby-union/270/scoreboard`,               emoji: '🏆' },
-  // Australian rules
-  { id: 'afl',              url: `${ESPN_BASE}/australian-football/afl/scoreboard`,        emoji: '🦘' },
-  // Basketball
-  { id: 'nba',              url: `${ESPN_BASE}/basketball/nba/scoreboard`,                emoji: '🏀' },
-  // American football
-  { id: 'nfl',              url: `${ESPN_BASE}/football/nfl/scoreboard`,                  emoji: '🏈' },
-  // Ice hockey
-  { id: 'nhl',              url: `${ESPN_BASE}/hockey/nhl/scoreboard`,                    emoji: '🏒' },
-  // Baseball
-  { id: 'mlb',              url: `${ESPN_BASE}/baseball/mlb/scoreboard`,                  emoji: '⚾' },
-  // Club soccer
-  { id: 'soccer_epl',       url: `${ESPN_BASE}/soccer/eng.1/scoreboard`,                  emoji: '⚽' },
-  { id: 'soccer_ucl',       url: `${ESPN_BASE}/soccer/uefa.champions/scoreboard`,         emoji: '⚽' },
-  { id: 'soccer_uel',       url: `${ESPN_BASE}/soccer/uefa.europa/scoreboard`,            emoji: '⚽' },
-  { id: 'soccer_uecl',      url: `${ESPN_BASE}/soccer/uefa.europa.conf/scoreboard`,       emoji: '⚽' },
-  { id: 'soccer_mls',       url: `${ESPN_BASE}/soccer/usa.1/scoreboard`,                  emoji: '⚽' },
-  { id: 'soccer_esp',       url: `${ESPN_BASE}/soccer/esp.1/scoreboard`,                  emoji: '⚽' },
-  { id: 'soccer_ger',       url: `${ESPN_BASE}/soccer/ger.1/scoreboard`,                  emoji: '⚽' },
-  { id: 'soccer_ita',       url: `${ESPN_BASE}/soccer/ita.1/scoreboard`,                  emoji: '⚽' },
-  { id: 'soccer_aus',       url: `${ESPN_BASE}/soccer/aus.1/scoreboard`,                  emoji: '⚽' },
-  { id: 'soccer_fra',       url: `${ESPN_BASE}/soccer/fra.1/scoreboard`,                  emoji: '⚽' },
-  { id: 'soccer_facup',     url: `${ESPN_BASE}/soccer/eng.fa/scoreboard`,                 emoji: '⚽' },
-  { id: 'soccer_efl',       url: `${ESPN_BASE}/soccer/eng.league_cup/scoreboard`,         emoji: '⚽' },
-  // International soccer
-  { id: 'soccer_nations',   url: `${ESPN_BASE}/soccer/uefa.nations/scoreboard`,           emoji: '⚽' },
-  { id: 'soccer_world',     url: `${ESPN_BASE}/soccer/fifa.world/scoreboard`,             emoji: '⚽' },
-  { id: 'soccer_euro',      url: `${ESPN_BASE}/soccer/uefa.euro/scoreboard`,              emoji: '⚽' },
-  { id: 'soccer_copa',      url: `${ESPN_BASE}/soccer/conmebol.copa/scoreboard`,          emoji: '⚽' },
-  { id: 'soccer_afc',       url: `${ESPN_BASE}/soccer/afc.asian.cup/scoreboard`,          emoji: '⚽' },
-  { id: 'soccer_gold',      url: `${ESPN_BASE}/soccer/concacaf.gold/scoreboard`,          emoji: '⚽' },
-  { id: 'soccer_wc_qual_eu',url: `${ESPN_BASE}/soccer/fifa.worldq.europe/scoreboard`,     emoji: '⚽' },
-  // Golf
-  { id: 'golf_pga',         url: `${ESPN_BASE}/golf/pga/scoreboard`,                      emoji: '⛳' },
-  { id: 'golf_eur',         url: `${ESPN_BASE}/golf/eur/scoreboard`,                      emoji: '⛳' },
-  // MMA
-  { id: 'mma',              url: `${ESPN_BASE}/mma/ufc/scoreboard`,                       emoji: '🥊' },
-  // International soccer friendlies / pre-tournament
-  { id: 'soccer_friendly',  url: `${ESPN_BASE}/soccer/fifa.friendly/scoreboard`,          emoji: '⚽' },
-  { id: 'soccer_friendly_m',url: `${ESPN_BASE}/soccer/fifa.friendly.m/scoreboard`,        emoji: '⚽' },
-  // Motorsport
-  { id: 'f1',               url: `${ESPN_BASE}/racing/f1/scoreboard`,                     emoji: '🏎️' },
+  { id: 'nrl',              name: 'NRL',                    url: `${ESPN_BASE}/rugby-league/3/scoreboard`,                emoji: '🏉' },
+  { id: 'rugby_union_sr',   name: 'Super Rugby',            url: `${ESPN_BASE}/rugby-union/267/scoreboard`,               emoji: '🏆' },
+  { id: 'rugby_union_6n',   name: 'Six Nations',            url: `${ESPN_BASE}/rugby-union/180/scoreboard`,               emoji: '🏆' },
+  { id: 'rugby_union_rc',   name: 'Rugby Championship',     url: `${ESPN_BASE}/rugby-union/272/scoreboard`,               emoji: '🏆' },
+  { id: 'rugby_union_pre',  name: 'Premiership Rugby',      url: `${ESPN_BASE}/rugby-union/269/scoreboard`,               emoji: '🏆' },
+  { id: 'rugby_union_urc',  name: 'United Rugby Championship', url: `${ESPN_BASE}/rugby-union/270/scoreboard`,            emoji: '🏆' },
+  { id: 'afl',              name: 'AFL',                    url: `${ESPN_BASE}/australian-football/afl/scoreboard`,        emoji: '🦘' },
+  { id: 'nba',              name: 'NBA',                    url: `${ESPN_BASE}/basketball/nba/scoreboard`,                emoji: '🏀' },
+  { id: 'nfl',              name: 'NFL',                    url: `${ESPN_BASE}/football/nfl/scoreboard`,                  emoji: '🏈' },
+  { id: 'nhl',              name: 'NHL',                    url: `${ESPN_BASE}/hockey/nhl/scoreboard`,                    emoji: '🏒' },
+  { id: 'mlb',              name: 'MLB',                    url: `${ESPN_BASE}/baseball/mlb/scoreboard`,                  emoji: '⚾' },
+  { id: 'soccer_epl',       name: 'Premier League',         url: `${ESPN_BASE}/soccer/eng.1/scoreboard`,                  emoji: '⚽' },
+  { id: 'soccer_ucl',       name: 'UEFA Champions League',  url: `${ESPN_BASE}/soccer/uefa.champions/scoreboard`,         emoji: '⚽' },
+  { id: 'soccer_uel',       name: 'UEFA Europa League',     url: `${ESPN_BASE}/soccer/uefa.europa/scoreboard`,            emoji: '⚽' },
+  { id: 'soccer_uecl',      name: 'UEFA Conference League', url: `${ESPN_BASE}/soccer/uefa.europa.conf/scoreboard`,       emoji: '⚽' },
+  { id: 'soccer_mls',       name: 'MLS',                    url: `${ESPN_BASE}/soccer/usa.1/scoreboard`,                  emoji: '⚽' },
+  { id: 'soccer_esp',       name: 'La Liga',                url: `${ESPN_BASE}/soccer/esp.1/scoreboard`,                  emoji: '⚽' },
+  { id: 'soccer_ger',       name: 'Bundesliga',             url: `${ESPN_BASE}/soccer/ger.1/scoreboard`,                  emoji: '⚽' },
+  { id: 'soccer_ita',       name: 'Serie A',                url: `${ESPN_BASE}/soccer/ita.1/scoreboard`,                  emoji: '⚽' },
+  { id: 'soccer_aus',       name: 'A-League',               url: `${ESPN_BASE}/soccer/aus.1/scoreboard`,                  emoji: '⚽' },
+  { id: 'soccer_fra',       name: 'Ligue 1',                url: `${ESPN_BASE}/soccer/fra.1/scoreboard`,                  emoji: '⚽' },
+  { id: 'soccer_facup',     name: 'FA Cup',                 url: `${ESPN_BASE}/soccer/eng.fa/scoreboard`,                 emoji: '⚽' },
+  { id: 'soccer_efl',       name: 'EFL Cup',                url: `${ESPN_BASE}/soccer/eng.league_cup/scoreboard`,         emoji: '⚽' },
+  { id: 'soccer_nations',   name: 'UEFA Nations League',    url: `${ESPN_BASE}/soccer/uefa.nations/scoreboard`,           emoji: '⚽' },
+  { id: 'soccer_world',     name: 'FIFA World Cup',         url: `${ESPN_BASE}/soccer/fifa.world/scoreboard`,             emoji: '⚽' },
+  { id: 'soccer_euro',      name: 'UEFA Euro',              url: `${ESPN_BASE}/soccer/uefa.euro/scoreboard`,              emoji: '⚽' },
+  { id: 'soccer_copa',      name: 'Copa América',           url: `${ESPN_BASE}/soccer/conmebol.copa/scoreboard`,          emoji: '⚽' },
+  { id: 'soccer_afc',       name: 'AFC Asian Cup',          url: `${ESPN_BASE}/soccer/afc.asian.cup/scoreboard`,          emoji: '⚽' },
+  { id: 'soccer_gold',      name: 'CONCACAF Gold Cup',      url: `${ESPN_BASE}/soccer/concacaf.gold/scoreboard`,          emoji: '⚽' },
+  { id: 'soccer_wc_qual_eu',name: 'World Cup Qualifying',   url: `${ESPN_BASE}/soccer/fifa.worldq.europe/scoreboard`,     emoji: '⚽' },
+  { id: 'soccer_friendly',  name: 'International Friendly', url: `${ESPN_BASE}/soccer/fifa.friendly/scoreboard`,          emoji: '⚽' },
+  { id: 'soccer_friendly_m',name: 'International Friendly', url: `${ESPN_BASE}/soccer/fifa.friendly.m/scoreboard`,        emoji: '⚽' },
+  { id: 'golf_pga',         name: 'PGA Tour',               url: `${ESPN_BASE}/golf/pga/scoreboard`,                      emoji: '⛳' },
+  { id: 'golf_eur',         name: 'DP World Tour',          url: `${ESPN_BASE}/golf/eur/scoreboard`,                      emoji: '⛳' },
+  { id: 'mma',              name: 'UFC',                    url: `${ESPN_BASE}/mma/ufc/scoreboard`,                       emoji: '🥊' },
+  { id: 'f1',               name: 'Formula 1',              url: `${ESPN_BASE}/racing/f1/scoreboard`,                     emoji: '🏎️' },
 ];
 
 const LEAGUE_TO_SPORT = {
@@ -174,7 +161,7 @@ async function fetchESPNFixtures() {
       const homeLogo = homeTeam.logos?.[0]?.href || homeTeam.logo || '';
       const awayLogo = awayTeam.logos?.[0]?.href || awayTeam.logo || '';
       const notes = event.competitions?.[0]?.notes || [];
-      const espnDesc = notes[0]?.headline || event.competitions?.[0]?.situation?.lastPlay?.text || '';
+      const espnDesc = notes[0]?.headline || league.name || '';
 
       fixtures.push({
         sportId,
