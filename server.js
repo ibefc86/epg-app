@@ -364,7 +364,9 @@ async function refresh() {
         const start = parseDate(startRaw);
         const stop = parseDate(stopRaw);
         if (!start || !stop) continue;
-        const prog = { start, stop, startRaw, title: p.getElementsByTagName('title')[0]?.textContent || '', desc: p.getElementsByTagName('desc')[0]?.textContent || '' };
+        const title = p.getElementsByTagName('title')[0]?.textContent || '';
+        if (!title || /^no listing|^no data|^tba$|^tbd$/i.test(title.trim())) continue;
+        const prog = { start, stop, startRaw, title, desc: p.getElementsByTagName('desc')[0]?.textContent || '' };
         if (!secondaryByName[name]) secondaryByName[name] = [];
         secondaryByName[name].push(prog);
         const lcn = idToLcn[chId];
