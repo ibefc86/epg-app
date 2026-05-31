@@ -228,10 +228,15 @@ function stripAccents(s) {
   return s.normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
 
-function matchFixtureStrict(title) {
+function matchFixtureStrict(title, progStart) {
   if (!title) return null;
   const t = stripAccents(title.toLowerCase().replace(/^[^:]+:\s*/, ''));
   for (const fix of fixtureCache) {
+    // Skip if ESPN fixture time is more than 12h away from EPG programme time
+    if (progStart && fix.espnStartTime) {
+      const diff = Math.abs(new Date(fix.espnStartTime) - progStart);
+      if (diff > 12 * 60 * 60 * 1000) continue;
+    }
     if (fix.name && fix.name.length > 5 && t.includes(fix.name.slice(0, 20))) return fix;
     if (fix.home && fix.away) {
       const homeWords = fix.home.split(' ').filter(w => w.length >= 6);
@@ -349,7 +354,7 @@ function buildChannelData(ch, progs, now) {
     } : null,
     next: next.filter(p => !isNonLive(p.title)).map(p => ({ title: p.title, desc: p.desc.slice(0, 100), startRaw: p.startRaw })),
     upcoming: upcoming.filter(p => !isNonLive(p.title)).map(p => {
-      const fix = matchFixtureStrict(p.title);
+      const fix = matchFixtureStrict(p.title, p.start);
       if (fix && fix.isUpcoming) {
         const sport = { sportId: fix.sportId, emoji: fix.emoji, isLive: false, fixtureKey: fix.fixtureKey, displayName: fix.displayName, homeLogo: fix.homeLogo, awayLogo: fix.awayLogo, homeColor: fix.homeColor || null, awayColor: fix.awayColor || null, espnDesc: fix.espnDesc || null };
         return { title: p.title, desc: p.desc.slice(0, 100), startRaw: p.startRaw, sport, fixtureKey: sport.fixtureKey, displayName: sport.displayName, espnStartTime: fix.espnStartTime || null };
