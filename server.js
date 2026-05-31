@@ -360,9 +360,12 @@ function buildChannelData(ch, progs, now) {
         const sport = { sportId: fix.sportId, emoji: fix.emoji, isLive: false, fixtureKey: fix.fixtureKey, displayName: fix.displayName, homeLogo: fix.homeLogo, awayLogo: fix.awayLogo, homeColor: fix.homeColor || null, awayColor: fix.awayColor || null, espnDesc: fix.espnDesc || null };
         return { title: p.title, desc: p.desc.slice(0, 100), startRaw: p.startRaw, sport, fixtureKey: sport.fixtureKey, displayName: sport.displayName, espnStartTime: fix.espnStartTime || null };
       }
-      // Fallback: keyword classification for channels where titles use abbreviations (e.g. secondary EPG)
-      const kw = keywordSport(p.title);
-      if (kw) return { title: p.title, desc: p.desc.slice(0, 100), startRaw: p.startRaw, sport: { ...kw, isLive: false }, fixtureKey: null, displayName: null, espnStartTime: null };
+      // Fallback: keyword classification, but only if title looks like an actual match
+      const looksLikeMatch = /\bvs?\.?\b|\bversus\b/i.test(p.title);
+      if (looksLikeMatch) {
+        const kw = keywordSport(p.title);
+        if (kw) return { title: p.title, desc: p.desc.slice(0, 100), startRaw: p.startRaw, sport: { ...kw, isLive: false }, fixtureKey: null, displayName: null, espnStartTime: null };
+      }
       return null;
     }).filter(Boolean)
   };
