@@ -108,7 +108,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: v
 .live-card .progress-bar { background: #dc2626; }
 .channel-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .channel-chip { display: flex; align-items: center; gap: 6px; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 5px 10px; }
-.chip-logo { width: 20px; height: 20px; object-fit: contain; border-radius: 3px; }
+.chip-logo { width: 20px; height: 20px; object-fit: contain; border-radius: 3px; background: var(--bg4); }
 .chip-logo-placeholder { width: 20px; height: 20px; border-radius: 3px; background: var(--bg4); display: flex; align-items: center; justify-content: center; font-size: 8px; color: var(--text5); flex-shrink: 0; }
 .chip-name { font-size: 12px; color: var(--text3); }
 .chip-tooltip { display: none; position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); background: var(--tooltip-bg); color: #fff; font-size: 12px; padding: 5px 10px; border-radius: 6px; white-space: nowrap; z-index: 10; pointer-events: none; }
@@ -145,8 +145,10 @@ body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: v
 .section-label.live::before { content: '●'; animation: pulse 1.5s infinite; }
 .section-label.other { color: var(--text5); }
 .team-logos { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.team-logo-wrap { width: 36px; height: 36px; border-radius: 50%; background: #fff; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
-.team-logo-img { width: 26px; height: 26px; object-fit: contain; display: block; }
+.team-logo-wrap { width: 36px; height: 36px; border-radius: 50%; background: #fff; overflow: hidden; flex-shrink: 0; box-shadow: 0 1px 4px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; }
+.team-logo-img { display: block; }
+.team-logo-img.logo-flag { width: 36px; height: 36px; object-fit: cover; }
+.team-logo-img.logo-badge { width: 26px; height: 26px; object-fit: contain; }
 .team-logo-vs { font-size: 11px; color: var(--text5); font-weight: 500; }
 </style>
 </head>
@@ -375,6 +377,9 @@ function renderChip(ch) {
   return `<div class="channel-chip">${logo}<span class="chip-name">${ch.displayName||ch.name}</span>${quality}<span class="chip-tooltip">${ch.displayName||ch.name}</span></div>`;
 }
 
+function isFlag(url) { return url && url.includes('/countries/'); }
+function logoClass(url) { return isFlag(url) ? 'logo-flag' : 'logo-badge'; }
+
 function renderMatchCard(group) {
   const sport = group.sport;
   const sportName = sport ? (SPORT_NAMES[sport.sportId] || sport.sportId) : '';
@@ -383,9 +388,9 @@ function renderMatchCard(group) {
   const homeLogo = sport?.homeLogo;
   const awayLogo = sport?.awayLogo;
   const teamLogos = (homeLogo || awayLogo) ? `<div class="team-logos">
-    ${homeLogo ? `<div class="team-logo-wrap"><img class="team-logo-img" src="${homeLogo}" alt="" onerror="this.parentElement.style.display='none'"></div>` : ''}
+    ${homeLogo ? `<div class="team-logo-wrap"><img class="team-logo-img ${logoClass(homeLogo)}" src="${homeLogo}" alt="" onerror="this.parentElement.style.display='none'"></div>` : ''}
     ${(homeLogo && awayLogo) ? `<span class="team-logo-vs">v</span>` : ''}
-    ${awayLogo ? `<div class="team-logo-wrap"><img class="team-logo-img" src="${awayLogo}" alt="" onerror="this.parentElement.style.display='none'"></div>` : ''}
+    ${awayLogo ? `<div class="team-logo-wrap"><img class="team-logo-img ${logoClass(awayLogo)}" src="${awayLogo}" alt="" onerror="this.parentElement.style.display='none'"></div>` : ''}
   </div>` : '';
   const QUALITY_ORDER = {'4K':4,'FHD':3,'HD':2,'SD':1,'':0};
   const sorted = [...group.channels].sort((a,b) => (QUALITY_ORDER[b.quality]||0) - (QUALITY_ORDER[a.quality]||0));
@@ -395,7 +400,7 @@ function renderMatchCard(group) {
   const heroLogo = hero.logo
     ? `<img class="chip-logo" style="width:28px;height:28px" src="${hero.logo}" alt="" onerror="this.style.display='none';this.nextSibling.style.display='flex'"/><div class="chip-logo-placeholder" style="display:none;width:28px;height:28px">${(hero.displayName||hero.name||'').slice(0,2)}</div>`
     : `<div class="chip-logo-placeholder" style="width:28px;height:28px">${(hero.displayName||hero.name||'').slice(0,2)}</div>`;
-  const heroChip = `<div class="channel-chip hero-chip">${heroLogo}<span class="chip-name" style="font-size:13px;font-weight:500;color:#fff">${hero.displayName||hero.name}</span>${hero.quality?`<span class="chip-quality" style="font-size:11px">${hero.quality}</span>`:''}</div>`;
+  const heroChip = `<div class="channel-chip hero-chip">${heroLogo}<span class="chip-name" style="font-size:13px;font-weight:500;color:var(--text)">${hero.displayName||hero.name}</span>${hero.quality?`<span class="chip-quality" style="font-size:11px">${hero.quality}</span>`:''}</div>`;
   const moreBtn = rest.length ? `<button class="more-btn" onclick="toggleMore('${cardId}')">▾ ${rest.length} more channel${rest.length>1?'s':''}</button>` : '';
   const restChips = rest.length ? `<div class="more-chips" id="${cardId}" style="display:none;flex-wrap:wrap;gap:8px;margin-top:8px">${rest.map(renderChip).join('')}</div>` : '';
   return `<div class="match-card${group.isLive?' live-card':''}">
