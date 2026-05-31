@@ -321,6 +321,10 @@ function groupUpcoming(channels, favSports) {
       if (!groups[key].channels.find(c => c.id === ch.id)) {
         groups[key].channels.push(ch);
       }
+      if (ch.lang === 'en' && prog.desc && !groups[key]._enDesc) {
+        groups[key].desc = prog.desc;
+        groups[key]._enDesc = true;
+      }
       if (!groups[key].startRaw) {
         groups[key].startRaw = prog.startRaw;
       }
@@ -348,8 +352,11 @@ function groupByMatch(filteredChannels) {
     }
     groups[key].channels.push(ch);
     if (ch.now.isLive) groups[key].isLive = true;
-    // Prefer ESPN display name for title
     if (ch.now.sport?.displayName) groups[key].title = ch.now.sport.displayName;
+    if (ch.lang === 'en' && ch.now.desc && !groups[key]._enDesc) {
+      groups[key].desc = ch.now.desc;
+      groups[key]._enDesc = true;
+    }
   }
   return Object.values(groups).sort((a, b) => {
     if (a.isLive && !b.isLive) return -1;
