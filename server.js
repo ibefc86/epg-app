@@ -214,7 +214,8 @@ const NON_LIVE = [
   'preview','analysis','best of','greatest','history of',
   'end of transmission','test card','review','the loop',
   'extended','wrap','teleshopping','sport today','sportscenter',
-  'classic','replay','blitz','compilation'
+  'classic','replay','blitz','compilation',
+  '(mw','matchweek','match day replay','season replay','match of the day',
 ];
 
 function isNonLive(title) {

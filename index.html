@@ -441,9 +441,9 @@ function cardGradient(sport, isLive) {
   const homeRgb = hexToRgb(sport?.homeColor);
   const awayRgb = hexToRgb(sport?.awayColor);
   if (!homeRgb && !awayRgb) return '';
-  const a = isLive ? 0.22 : 0.14;
+  const a = isLive ? 0.28 : 0.20;
   if (homeRgb && awayRgb) {
-    return `background: linear-gradient(135deg, rgba(${homeRgb},${a}) 0%, var(--bg2) 45%, var(--bg2) 55%, rgba(${awayRgb},${a}) 100%);`;
+    return `background: linear-gradient(135deg, rgba(${homeRgb},${a}) 0%, var(--bg2) 40%, var(--bg2) 60%, rgba(${awayRgb},${a}) 100%);`;
   }
   const rgb = homeRgb || awayRgb;
   return `background: linear-gradient(135deg, rgba(${rgb},${a}) 0%, var(--bg2) 60%);`;
