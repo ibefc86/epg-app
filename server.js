@@ -1,15 +1,26 @@
 const express = require('express');
 const axios = require('axios');
 const path = require('path');
+const zlib = require('zlib');
 const { DOMParser } = require('@xmldom/xmldom');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 const EPG_URL = 'https://305.halfvex.com/xmltv.php?username=ib123&password=gP4HRjkXrc';
 const EPG_SECONDARY_URLS = [
-  'https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Foxtel/epg.xml',
-  'https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/au/Sydney/epg.xml',
+  { url: 'https://epgshare01.online/epgshare01/epg_ripper_AU1.xml.gz', gzip: true },
+  { url: 'https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/au/Sydney/epg.xml', gzip: false },
 ];
+
+// Foxtel LCN → canonical channel name (stable channel numbers)
+const FOXTEL_LCN_MAP = {
+  '500': 'fox sports news', '501': 'fox cricket', '502': 'fox league',
+  '503': 'fox sports 503',  '504': 'fox footy',   '505': 'fox sports 505',
+  '506': 'fox sports 506',  '507': 'fox sports more', '510': 'espn',
+  '511': 'espn2', '520': 'sky news australia', '521': 'sky news extra',
+  '522': 'sky news regional', '530': 'racing.com', '531': 'sky racing 1',
+  '532': 'sky racing 2',
+};
 const ESPN_BASE = 'https://site.api.espn.com/apis/site/v2/sports';
 
 const ESPN_LEAGUES = [
@@ -332,8 +343,12 @@ async function refresh() {
     console.log('Fetching EPG + secondary sources...');
     const [epgText, ...secondaryTexts] = await Promise.all([
       axios.get(EPG_URL, { timeout: 120000, responseType: 'text' }).then(r => r.data),
-      ...EPG_SECONDARY_URLS.map(url =>
-        axios.get(url, { timeout: 30000, responseType: 'text' }).then(r => r.data).catch(() => null)
+      ...EPG_SECONDARY_URLS.map(({ url, gzip }) =>
+        axios.get(url, { timeout: 30000, responseType: 'arraybuffer' })
+          .then(r => gzip
+            ? new Promise((res, rej) => zlib.gunzip(r.data, (e, d) => e ? rej(e) : res(d.toString('utf8'))))
+            : r.data.toString('utf8'))
+          .catch(() => null)
       )
     ]);
 
@@ -381,9 +396,13 @@ async function refresh() {
 
     function findSecondaryProgs(normName) {
       if (secondaryByName[normName]) return secondaryByName[normName];
-      // Try matching by number in channel name against LCN
+      // Resolve via Foxtel LCN map: "fox sports 502" → "fox league"
       const numMatch = normName.match(/\b(\d{3,4})\b/);
-      if (numMatch && secondaryByLcn[numMatch[1]]) return secondaryByLcn[numMatch[1]];
+      if (numMatch) {
+        const canonName = FOXTEL_LCN_MAP[numMatch[1]];
+        if (canonName && secondaryByName[canonName]) return secondaryByName[canonName];
+        if (secondaryByLcn[numMatch[1]]?.length) return secondaryByLcn[numMatch[1]];
+      }
       // Partial name match
       const match = secondaryNames.find(n => normName.includes(n) || n.includes(normName));
       return match ? secondaryByName[match] : null;
