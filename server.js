@@ -362,9 +362,10 @@ async function fillSecondaryEPG(channels, progsByChannel) {
   for (const { url, gzip } of EPG_SECONDARY_URLS) {
     try {
       const raw = await axios.get(url, { timeout: 45000, responseType: 'arraybuffer' });
-      const text = gzip
+      let text = gzip
         ? await new Promise((res, rej) => zlib.gunzip(raw.data, (e, d) => e ? rej(e) : res(d.toString('utf8'))))
         : raw.data.toString('utf8');
+      text = text.replace(/^﻿/, '').trimStart(); // strip BOM and leading whitespace
 
       const xml2 = new DOMParser().parseFromString(text, 'text/xml');
       const idToName = {}, idToLcn = {};
@@ -389,7 +390,9 @@ async function fillSecondaryEPG(channels, progsByChannel) {
         const lcn = idToLcn[chId];
         if (lcn) { if (!secondaryByLcn[lcn]) secondaryByLcn[lcn] = []; secondaryByLcn[lcn].push(prog); }
       }
-      console.log(`Secondary EPG loaded: ${url.split('/').pop()}`);
+      const chCount = Object.keys(idToName).length;
+      const foxKeys = Object.keys(secondaryByName).filter(n => n.includes('fox'));
+      console.log(`Secondary EPG loaded: ${url.split('/').pop()} — ${chCount} channels, fox channels: ${foxKeys.join(', ')}`);
     } catch(e) {
       console.error(`Secondary EPG failed (${url.split('/').pop()}):`, e.message);
     }
@@ -419,6 +422,9 @@ async function fillSecondaryEPG(channels, progsByChannel) {
   });
   cache = updatedCache;
   console.log(`Secondary EPG: filled ${filled} channels`);
+  // Debug: log what fox sports 502 resolved to
+  const fox502 = cache.find(ch => normaliseChannelName(ch.name).includes('fox sports 502') || normaliseChannelName(ch.name).includes('fox league'));
+  if (fox502) console.log(`Fox 502 check: ${fox502.name} — now: ${fox502.now?.title || 'none'}, next: ${fox502.next?.length || 0}`);
 }
 
 async function refreshFixtures() {
