@@ -240,8 +240,8 @@ function matchFixtureStrict(title, progStart) {
     }
     if (fix.name && fix.name.length > 5 && t.includes(fix.name.slice(0, 20))) return fix;
     if (fix.home && fix.away) {
-      const homeWords = fix.home.split(' ').filter(w => w.length >= 6);
-      const awayWords = fix.away.split(' ').filter(w => w.length >= 6);
+      const homeWords = fix.home.split(' ').filter(w => w.length >= 4);
+      const awayWords = fix.away.split(' ').filter(w => w.length >= 4);
       if (homeWords.length >= 1 && awayWords.length >= 1) {
         if (homeWords.some(w => t.includes(w)) && awayWords.some(w => t.includes(w))) return fix;
       }
@@ -257,7 +257,7 @@ function matchFixture(title) {
   for (const fix of fixtureCache) {
     if (fix.name && fix.name.length > 5 && t.includes(fix.name.slice(0, 20))) return fix;
     if (fix.name && fix.name.length > 5) {
-      const fixWords = fix.name.split(' ').filter(w => w.length >= 5);
+      const fixWords = fix.name.split(' ').filter(w => w.length >= 4);
       const matches = fixWords.filter(w => t.includes(w));
       if (fixWords.length >= 2 && matches.length >= 2) return fix;
       // Also try matching EPG title words against ESPN name
@@ -267,8 +267,8 @@ function matchFixture(title) {
     }
 
     if (fix.home && fix.away) {
-      const homeWords = fix.home.split(' ').filter(w => w.length >= 5);
-      const awayWords = fix.away.split(' ').filter(w => w.length >= 5);
+      const homeWords = fix.home.split(' ').filter(w => w.length >= 4);
+      const awayWords = fix.away.split(' ').filter(w => w.length >= 4);
       if (homeWords.length && awayWords.length) {
         if (homeWords.some(w => t.includes(w)) && awayWords.some(w => t.includes(w))) return fix;
       }
