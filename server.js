@@ -6,6 +6,10 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 const EPG_URL = 'https://305.halfvex.com/xmltv.php?username=ib123&password=gP4HRjkXrc';
+const EPG_SECONDARY_URLS = [
+  'https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Foxtel/epg.xml',
+  'https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/au/Sydney/epg.xml',
+];
 const ESPN_BASE = 'https://site.api.espn.com/apis/site/v2/sports';
 
 const ESPN_LEAGUES = [
@@ -325,8 +329,50 @@ async function refresh() {
   try {
     console.log('Fetching fixtures first...');
     await fetchESPNFixtures();
-    console.log('Fetching EPG...');
-    const epgText = await axios.get(EPG_URL, { timeout: 120000, responseType: 'text' }).then(r => r.data);
+    console.log('Fetching EPG + secondary sources...');
+    const [epgText, ...secondaryTexts] = await Promise.all([
+      axios.get(EPG_URL, { timeout: 120000, responseType: 'text' }).then(r => r.data),
+      ...EPG_SECONDARY_URLS.map(url =>
+        axios.get(url, { timeout: 30000, responseType: 'text' }).then(r => r.data).catch(() => null)
+      )
+    ]);
+
+    // Build secondary EPG name → programmes map
+    const secondaryByName = {};
+    for (const text of secondaryTexts) {
+      if (!text) continue;
+      const xml2 = new DOMParser().parseFromString(text, 'text/xml');
+      const idToName = {};
+      for (const c of Array.from(xml2.getElementsByTagName('channel'))) {
+        const id = c.getAttribute('id');
+        const name = normaliseChannelName(c.getElementsByTagName('display-name')[0]?.textContent || '');
+        if (id && name) idToName[id] = name;
+      }
+      for (const p of Array.from(xml2.getElementsByTagName('programme'))) {
+        const name = idToName[p.getAttribute('channel')];
+        if (!name) continue;
+        const startRaw = p.getAttribute('start');
+        const stopRaw = p.getAttribute('stop');
+        const start = parseDate(startRaw);
+        const stop = parseDate(stopRaw);
+        if (!start || !stop) continue;
+        if (!secondaryByName[name]) secondaryByName[name] = [];
+        secondaryByName[name].push({
+          start, stop, startRaw,
+          title: p.getElementsByTagName('title')[0]?.textContent || '',
+          desc: p.getElementsByTagName('desc')[0]?.textContent || ''
+        });
+      }
+    }
+    const secondaryNames = Object.keys(secondaryByName);
+    console.log(`Secondary EPG: ${secondaryNames.length} channels loaded`);
+
+    function findSecondaryProgs(normName) {
+      if (secondaryByName[normName]) return secondaryByName[normName];
+      // Partial match — secondary name contained in channel name or vice versa
+      const match = secondaryNames.find(n => normName.includes(n) || n.includes(normName));
+      return match ? secondaryByName[match] : null;
+    }
 
     console.log('Parsing EPG XML...');
     const xml = new DOMParser().parseFromString(epgText, 'text/xml');
@@ -356,8 +402,13 @@ async function refresh() {
       progsByChannel[p.channel].push(p);
     });
 
+    let secondaryFilled = 0;
     const raw = channels.map(ch => {
-      const progs = (progsByChannel[ch.id] || []).sort((a,b) => a.start - b.start);
+      let progs = (progsByChannel[ch.id] || []).sort((a,b) => a.start - b.start);
+      if (!progs.length) {
+        const secProgs = findSecondaryProgs(normaliseChannelName(ch.name));
+        if (secProgs) { progs = secProgs.slice().sort((a,b) => a.start - b.start); secondaryFilled++; }
+      }
       const nowP = progs.find(p => p.start <= now && p.stop > now);
       const in24h = new Date(now.getTime() + 24*60*60*1000);
       const next = progs.filter(p => p.start > now && p.start < in24h).slice(0, 2);
@@ -402,7 +453,7 @@ async function refresh() {
     });
 
     cache = deduplicateChannels(raw);
-    console.log(`EPG ready — ${raw.length} → ${cache.length} channels`);
+    console.log(`EPG ready — ${raw.length} → ${cache.length} channels (${secondaryFilled} filled from secondary EPG)`);
   } catch(e) {
     console.error('Refresh failed:', e.message);
     setTimeout(refresh, 2 * 60 * 1000);
