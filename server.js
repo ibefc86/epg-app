@@ -327,6 +327,100 @@ function classifyProgramme(title) {
   return null;
 }
 
+function buildChannelData(ch, progs, now) {
+  const sorted = progs.slice().sort((a,b) => a.start - b.start);
+  const nowP = sorted.find(p => p.start <= now && p.stop > now);
+  const in24h = new Date(now.getTime() + 24*60*60*1000);
+  const next = sorted.filter(p => p.start > now && p.start < in24h).slice(0, 2);
+  const upcoming = sorted.filter(p => p.start > now && p.start < in24h);
+  const classified = nowP ? classifyProgramme(nowP.title) : null;
+  return {
+    ...ch,
+    now: nowP ? {
+      title: nowP.title, desc: nowP.desc.slice(0, 150), startRaw: nowP.startRaw,
+      pct: Math.min(100, Math.round(((now - nowP.start) / (nowP.stop - nowP.start)) * 100)),
+      sport: classified, isLive: classified?.isLive || false,
+    } : null,
+    next: next.filter(p => !isNonLive(p.title)).map(p => ({ title: p.title, desc: p.desc.slice(0, 100), startRaw: p.startRaw })),
+    upcoming: upcoming.filter(p => !isNonLive(p.title)).map(p => {
+      const fix = matchFixtureStrict(p.title);
+      if (!fix || !fix.isUpcoming) return null;
+      const sport = { sportId: fix.sportId, emoji: fix.emoji, isLive: false, fixtureKey: fix.fixtureKey, displayName: fix.displayName, homeLogo: fix.homeLogo, awayLogo: fix.awayLogo, espnDesc: fix.espnDesc || null };
+      return { title: p.title, desc: p.desc.slice(0, 100), startRaw: p.startRaw, sport, fixtureKey: sport.fixtureKey, displayName: sport.displayName, espnStartTime: fix.espnStartTime || null };
+    }).filter(Boolean)
+  };
+}
+
+async function fillSecondaryEPG(channels, progsByChannel) {
+  const emptyChannels = channels.filter(ch => !(progsByChannel[ch.id] || []).length);
+  if (!emptyChannels.length) return;
+  console.log(`Secondary EPG: filling ${emptyChannels.length} empty channels...`);
+
+  const secondaryByName = {};
+  const secondaryByLcn = {};
+
+  for (const { url, gzip } of EPG_SECONDARY_URLS) {
+    try {
+      const raw = await axios.get(url, { timeout: 45000, responseType: 'arraybuffer' });
+      const text = gzip
+        ? await new Promise((res, rej) => zlib.gunzip(raw.data, (e, d) => e ? rej(e) : res(d.toString('utf8'))))
+        : raw.data.toString('utf8');
+
+      const xml2 = new DOMParser().parseFromString(text, 'text/xml');
+      const idToName = {}, idToLcn = {};
+      for (const c of Array.from(xml2.getElementsByTagName('channel'))) {
+        const id = c.getAttribute('id');
+        const name = normaliseChannelName(c.getElementsByTagName('display-name')[0]?.textContent || '');
+        const lcn = c.getElementsByTagName('lcn')[0]?.textContent || '';
+        if (id && name) { idToName[id] = name; if (lcn) idToLcn[id] = lcn; }
+      }
+      for (const p of Array.from(xml2.getElementsByTagName('programme'))) {
+        const chId = p.getAttribute('channel');
+        const name = idToName[chId];
+        if (!name) continue;
+        const startRaw = p.getAttribute('start'), stopRaw = p.getAttribute('stop');
+        const start = parseDate(startRaw), stop = parseDate(stopRaw);
+        if (!start || !stop) continue;
+        const title = p.getElementsByTagName('title')[0]?.textContent || '';
+        if (!title || /^no listing|^no data|^tba$|^tbd$/i.test(title.trim())) continue;
+        const prog = { start, stop, startRaw, title, desc: p.getElementsByTagName('desc')[0]?.textContent || '' };
+        if (!secondaryByName[name]) secondaryByName[name] = [];
+        secondaryByName[name].push(prog);
+        const lcn = idToLcn[chId];
+        if (lcn) { if (!secondaryByLcn[lcn]) secondaryByLcn[lcn] = []; secondaryByLcn[lcn].push(prog); }
+      }
+      console.log(`Secondary EPG loaded: ${url.split('/').pop()}`);
+    } catch(e) {
+      console.error(`Secondary EPG failed (${url.split('/').pop()}):`, e.message);
+    }
+  }
+
+  const secondaryNames = Object.keys(secondaryByName);
+  function findSecondaryProgs(normName) {
+    if (secondaryByName[normName]) return secondaryByName[normName];
+    const numMatch = normName.match(/\b(\d{3,4})\b/);
+    if (numMatch) {
+      const canonName = FOXTEL_LCN_MAP[numMatch[1]];
+      if (canonName && secondaryByName[canonName]) return secondaryByName[canonName];
+      if (secondaryByLcn[numMatch[1]]?.length) return secondaryByLcn[numMatch[1]];
+    }
+    const match = secondaryNames.find(n => normName.includes(n) || n.includes(normName));
+    return match ? secondaryByName[match] : null;
+  }
+
+  const now = new Date();
+  let filled = 0;
+  const updatedCache = cache.map(ch => {
+    if (ch.now || ch.next?.length) return ch;
+    const secProgs = findSecondaryProgs(normaliseChannelName(ch.name));
+    if (!secProgs?.length) return ch;
+    filled++;
+    return buildChannelData(ch, secProgs, now);
+  });
+  cache = updatedCache;
+  console.log(`Secondary EPG: filled ${filled} channels`);
+}
+
 async function refreshFixtures() {
   try {
     await fetchESPNFixtures();
@@ -340,73 +434,8 @@ async function refresh() {
   try {
     console.log('Fetching fixtures first...');
     await fetchESPNFixtures();
-    console.log('Fetching EPG + secondary sources...');
-    const [epgText, ...secondaryTexts] = await Promise.all([
-      axios.get(EPG_URL, { timeout: 120000, responseType: 'text' }).then(r => r.data),
-      ...EPG_SECONDARY_URLS.map(({ url, gzip }) =>
-        axios.get(url, { timeout: 30000, responseType: 'arraybuffer' })
-          .then(r => gzip
-            ? new Promise((res, rej) => zlib.gunzip(r.data, (e, d) => e ? rej(e) : res(d.toString('utf8'))))
-            : r.data.toString('utf8'))
-          .catch(() => null)
-      )
-    ]);
-
-    // Build secondary EPG name → programmes and lcn → programmes maps
-    const secondaryByName = {};
-    const secondaryByLcn = {};
-    for (const text of secondaryTexts) {
-      if (!text) continue;
-      const xml2 = new DOMParser().parseFromString(text, 'text/xml');
-      const idToName = {};
-      const idToLcn = {};
-      for (const c of Array.from(xml2.getElementsByTagName('channel'))) {
-        const id = c.getAttribute('id');
-        const name = normaliseChannelName(c.getElementsByTagName('display-name')[0]?.textContent || '');
-        const lcn = c.getElementsByTagName('lcn')[0]?.textContent || '';
-        if (id && name) { idToName[id] = name; if (lcn) idToLcn[id] = lcn; }
-      }
-      // Build lcn → name lookup
-      const lcnToName = {};
-      for (const [id, lcn] of Object.entries(idToLcn)) lcnToName[lcn] = idToName[id];
-
-      for (const p of Array.from(xml2.getElementsByTagName('programme'))) {
-        const chId = p.getAttribute('channel');
-        const name = idToName[chId];
-        if (!name) continue;
-        const startRaw = p.getAttribute('start');
-        const stopRaw = p.getAttribute('stop');
-        const start = parseDate(startRaw);
-        const stop = parseDate(stopRaw);
-        if (!start || !stop) continue;
-        const title = p.getElementsByTagName('title')[0]?.textContent || '';
-        if (!title || /^no listing|^no data|^tba$|^tbd$/i.test(title.trim())) continue;
-        const prog = { start, stop, startRaw, title, desc: p.getElementsByTagName('desc')[0]?.textContent || '' };
-        if (!secondaryByName[name]) secondaryByName[name] = [];
-        secondaryByName[name].push(prog);
-        const lcn = idToLcn[chId];
-        if (lcn) {
-          if (!secondaryByLcn[lcn]) secondaryByLcn[lcn] = [];
-          secondaryByLcn[lcn].push(prog);
-        }
-      }
-    }
-    const secondaryNames = Object.keys(secondaryByName);
-    console.log(`Secondary EPG: ${secondaryNames.length} channels loaded`);
-
-    function findSecondaryProgs(normName) {
-      if (secondaryByName[normName]) return secondaryByName[normName];
-      // Resolve via Foxtel LCN map: "fox sports 502" → "fox league"
-      const numMatch = normName.match(/\b(\d{3,4})\b/);
-      if (numMatch) {
-        const canonName = FOXTEL_LCN_MAP[numMatch[1]];
-        if (canonName && secondaryByName[canonName]) return secondaryByName[canonName];
-        if (secondaryByLcn[numMatch[1]]?.length) return secondaryByLcn[numMatch[1]];
-      }
-      // Partial name match
-      const match = secondaryNames.find(n => normName.includes(n) || n.includes(normName));
-      return match ? secondaryByName[match] : null;
-    }
+    console.log('Fetching EPG...');
+    const epgText = await axios.get(EPG_URL, { timeout: 120000, responseType: 'text' }).then(r => r.data);
 
     console.log('Parsing EPG XML...');
     const xml = new DOMParser().parseFromString(epgText, 'text/xml');
@@ -436,58 +465,12 @@ async function refresh() {
       progsByChannel[p.channel].push(p);
     });
 
-    let secondaryFilled = 0;
-    const raw = channels.map(ch => {
-      let progs = (progsByChannel[ch.id] || []).sort((a,b) => a.start - b.start);
-      if (!progs.length) {
-        const secProgs = findSecondaryProgs(normaliseChannelName(ch.name));
-        if (secProgs) { progs = secProgs.slice().sort((a,b) => a.start - b.start); secondaryFilled++; }
-      }
-      const nowP = progs.find(p => p.start <= now && p.stop > now);
-      const in24h = new Date(now.getTime() + 24*60*60*1000);
-      const next = progs.filter(p => p.start > now && p.start < in24h).slice(0, 2);
-      const upcoming = progs.filter(p => p.start > now && p.start < in24h);
-      const classified = nowP ? classifyProgramme(nowP.title) : null;
-
-      return {
-        ...ch,
-        now: nowP ? {
-          title: nowP.title,
-          desc: nowP.desc.slice(0, 150),
-          startRaw: nowP.startRaw,
-          pct: Math.min(100, Math.round(((now - nowP.start) / (nowP.stop - nowP.start)) * 100)),
-          sport: classified,
-          isLive: classified?.isLive || false,
-        } : null,
-      next: next.filter(p => !isNonLive(p.title)).map(p => ({
-          title: p.title, desc: p.desc.slice(0, 100), startRaw: p.startRaw
-        })),
-        upcoming: upcoming.filter(p => !isNonLive(p.title)).map(p => {
-          const fix = matchFixtureStrict(p.title);
-          if (!fix || !fix.isUpcoming) return null;
-          const upcomingClassified = {
-            sportId: fix.sportId,
-            emoji: fix.emoji,
-            isLive: false,
-            fixtureKey: fix.fixtureKey,
-            displayName: fix.displayName,
-            homeLogo: fix.homeLogo,
-            awayLogo: fix.awayLogo,
-            espnDesc: fix.espnDesc || null,
-          };
-          return {
-            title: p.title, desc: p.desc.slice(0, 100), startRaw: p.startRaw,
-            sport: upcomingClassified,
-            fixtureKey: upcomingClassified.fixtureKey,
-            displayName: upcomingClassified.displayName,
-            espnStartTime: fix.espnStartTime || null
-          };
-        }).filter(Boolean)
-      };
-    });
+    const raw = channels.map(ch => buildChannelData(ch, progsByChannel[ch.id] || [], now));
 
     cache = deduplicateChannels(raw);
-    console.log(`EPG ready — ${raw.length} → ${cache.length} channels (${secondaryFilled} filled from secondary EPG)`);
+    console.log(`EPG ready — ${raw.length} → ${cache.length} channels`);
+    // Fill missing channels from secondary EPG in background (non-blocking)
+    fillSecondaryEPG(channels, progsByChannel).catch(e => console.error('Secondary EPG error:', e.message));
   } catch(e) {
     console.error('Refresh failed:', e.message);
     setTimeout(refresh, 2 * 60 * 1000);
