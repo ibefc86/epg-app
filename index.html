@@ -288,7 +288,10 @@ function classifyUpcoming(prog) {
 function isEnglishDesc(desc) {
   if (!desc) return false;
   const nonAscii = (desc.match(/[^\x00-\x7F]/g) || []).length;
-  return nonAscii / desc.length < 0.08;
+  if (nonAscii / desc.length > 0.05) return false;
+  const t = ' ' + desc.toLowerCase() + ' ';
+  const englishMarkers = [' the ',' and ',' in ',' at ',' for ',' of ',' is ',' are ',' on ',' to ',' with ',' host',' game ',' match ',' play',' season',' round ',' cup ',' league '];
+  return englishMarkers.some(w => t.includes(w));
 }
 
 function isNonLiveClient(title) {
@@ -320,13 +323,14 @@ function groupUpcoming(channels, favSports) {
           startRaw: prog.startRaw,
           espnStartTime: prog.espnStartTime || null,
           effectiveTime,
-          desc: prog.sport?.espnDesc || '',
+          desc: prog.sport?.espnDesc || (isEnglishDesc(prog.desc) ? prog.desc : ''),
           channels: []
         };
       }
       if (!groups[key].channels.find(c => c.id === ch.id)) {
         groups[key].channels.push(ch);
       }
+      if (!groups[key].desc && isEnglishDesc(prog.desc)) groups[key].desc = prog.desc;
       if (!groups[key].startRaw) {
         groups[key].startRaw = prog.startRaw;
       }
@@ -347,13 +351,14 @@ function groupByMatch(filteredChannels) {
         isLive: ch.now.isLive,
         pct: ch.now.pct,
         startRaw: ch.now.startRaw,
-        desc: ch.now.sport?.espnDesc || '',
+        desc: ch.now.sport?.espnDesc || (isEnglishDesc(ch.now.desc) ? ch.now.desc : ''),
         channels: []
       };
     }
     groups[key].channels.push(ch);
     if (ch.now.isLive) groups[key].isLive = true;
     if (ch.now.sport?.displayName) groups[key].title = ch.now.sport.displayName;
+    if (!groups[key].desc && isEnglishDesc(ch.now.desc)) groups[key].desc = ch.now.desc;
   }
   return Object.values(groups).sort((a, b) => {
     if (a.isLive && !b.isLive) return -1;

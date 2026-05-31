@@ -161,7 +161,7 @@ async function fetchESPNFixtures() {
       const homeLogo = homeTeam.logos?.[0]?.href || homeTeam.logo || '';
       const awayLogo = awayTeam.logos?.[0]?.href || awayTeam.logo || '';
       const notes = event.competitions?.[0]?.notes || [];
-      const espnDesc = notes[0]?.headline || league.name || '';
+      const espnDesc = notes[0]?.headline || '';
 
       fixtures.push({
         sportId,
