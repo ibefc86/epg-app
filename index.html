@@ -285,6 +285,12 @@ function classifyUpcoming(prog) {
   return prog.sport;
 }
 
+function isEnglishDesc(desc) {
+  if (!desc) return false;
+  const nonAscii = (desc.match(/[^\x00-\x7F]/g) || []).length;
+  return nonAscii / desc.length < 0.08;
+}
+
 function isNonLiveClient(title) {
   if (!title) return true;
   const t = title.toLowerCase();
@@ -321,9 +327,11 @@ function groupUpcoming(channels, favSports) {
       if (!groups[key].channels.find(c => c.id === ch.id)) {
         groups[key].channels.push(ch);
       }
-      if (ch.lang === 'en' && prog.desc && !groups[key]._enDesc) {
+      if (isEnglishDesc(prog.desc) && !groups[key]._enDesc) {
         groups[key].desc = prog.desc;
         groups[key]._enDesc = true;
+      } else if (!groups[key]._enDesc && !isEnglishDesc(groups[key].desc) && prog.desc) {
+        groups[key].desc = '';
       }
       if (!groups[key].startRaw) {
         groups[key].startRaw = prog.startRaw;
@@ -353,9 +361,11 @@ function groupByMatch(filteredChannels) {
     groups[key].channels.push(ch);
     if (ch.now.isLive) groups[key].isLive = true;
     if (ch.now.sport?.displayName) groups[key].title = ch.now.sport.displayName;
-    if (ch.lang === 'en' && ch.now.desc && !groups[key]._enDesc) {
+    if (isEnglishDesc(ch.now.desc) && !groups[key]._enDesc) {
       groups[key].desc = ch.now.desc;
       groups[key]._enDesc = true;
+    } else if (!groups[key]._enDesc && !isEnglishDesc(groups[key].desc) && ch.now.desc) {
+      groups[key].desc = '';
     }
   }
   return Object.values(groups).sort((a, b) => {
