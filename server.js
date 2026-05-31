@@ -175,6 +175,8 @@ async function fetchESPNFixtures() {
       const awayShort = awayTeam.shortDisplayName || '';
       const homeLogo = homeTeam.logos?.[0]?.href || homeTeam.logo || '';
       const awayLogo = awayTeam.logos?.[0]?.href || awayTeam.logo || '';
+      const homeColor = homeTeam.color ? `#${homeTeam.color}` : null;
+      const awayColor = awayTeam.color ? `#${awayTeam.color}` : null;
       const notes = event.competitions?.[0]?.notes || [];
       const espnDesc = notes[0]?.headline || '';
 
@@ -190,6 +192,8 @@ async function fetchESPNFixtures() {
         displayName: (home && away) ? `${home} v ${away}` : (event.name || ''),
         homeLogo,
         awayLogo,
+        homeColor,
+        awayColor,
         espnDesc,
         isLive: state === 'in',
         isUpcoming: state === 'pre',
@@ -320,6 +324,8 @@ function classifyProgramme(title) {
     displayName: fix.isLive ? fix.displayName : null,
     homeLogo: fix.isLive ? fix.homeLogo : null,
     awayLogo: fix.isLive ? fix.awayLogo : null,
+    homeColor: fix.homeColor || null,
+    awayColor: fix.awayColor || null,
     espnDesc: fix.espnDesc || null,
   };
   const kw = keywordSport(title);
@@ -344,9 +350,14 @@ function buildChannelData(ch, progs, now) {
     next: next.filter(p => !isNonLive(p.title)).map(p => ({ title: p.title, desc: p.desc.slice(0, 100), startRaw: p.startRaw })),
     upcoming: upcoming.filter(p => !isNonLive(p.title)).map(p => {
       const fix = matchFixtureStrict(p.title);
-      if (!fix || !fix.isUpcoming) return null;
-      const sport = { sportId: fix.sportId, emoji: fix.emoji, isLive: false, fixtureKey: fix.fixtureKey, displayName: fix.displayName, homeLogo: fix.homeLogo, awayLogo: fix.awayLogo, espnDesc: fix.espnDesc || null };
-      return { title: p.title, desc: p.desc.slice(0, 100), startRaw: p.startRaw, sport, fixtureKey: sport.fixtureKey, displayName: sport.displayName, espnStartTime: fix.espnStartTime || null };
+      if (fix && fix.isUpcoming) {
+        const sport = { sportId: fix.sportId, emoji: fix.emoji, isLive: false, fixtureKey: fix.fixtureKey, displayName: fix.displayName, homeLogo: fix.homeLogo, awayLogo: fix.awayLogo, homeColor: fix.homeColor || null, awayColor: fix.awayColor || null, espnDesc: fix.espnDesc || null };
+        return { title: p.title, desc: p.desc.slice(0, 100), startRaw: p.startRaw, sport, fixtureKey: sport.fixtureKey, displayName: sport.displayName, espnStartTime: fix.espnStartTime || null };
+      }
+      // Fallback: keyword classification for channels where titles use abbreviations (e.g. secondary EPG)
+      const kw = keywordSport(p.title);
+      if (kw) return { title: p.title, desc: p.desc.slice(0, 100), startRaw: p.startRaw, sport: { ...kw, isLive: false }, fixtureKey: null, displayName: null, espnStartTime: null };
+      return null;
     }).filter(Boolean)
   };
 }
