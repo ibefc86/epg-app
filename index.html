@@ -320,14 +320,13 @@ function groupUpcoming(channels, favSports) {
           startRaw: prog.startRaw,
           espnStartTime: prog.espnStartTime || null,
           effectiveTime,
-          desc: prog.sport?.espnDesc || (isEnglishDesc(prog.desc) ? prog.desc : ''),
+          desc: prog.sport?.espnDesc || '',
           channels: []
         };
       }
       if (!groups[key].channels.find(c => c.id === ch.id)) {
         groups[key].channels.push(ch);
       }
-      if (!groups[key].desc && isEnglishDesc(prog.desc)) groups[key].desc = prog.desc;
       if (!groups[key].startRaw) {
         groups[key].startRaw = prog.startRaw;
       }
@@ -348,14 +347,13 @@ function groupByMatch(filteredChannels) {
         isLive: ch.now.isLive,
         pct: ch.now.pct,
         startRaw: ch.now.startRaw,
-        desc: ch.now.sport?.espnDesc || (isEnglishDesc(ch.now.desc) ? ch.now.desc : ''),
+        desc: ch.now.sport?.espnDesc || '',
         channels: []
       };
     }
     groups[key].channels.push(ch);
     if (ch.now.isLive) groups[key].isLive = true;
     if (ch.now.sport?.displayName) groups[key].title = ch.now.sport.displayName;
-    if (!groups[key].desc && isEnglishDesc(ch.now.desc)) groups[key].desc = ch.now.desc;
   }
   return Object.values(groups).sort((a, b) => {
     if (a.isLive && !b.isLive) return -1;
