@@ -9,31 +9,75 @@ const EPG_URL = 'https://305.halfvex.com/xmltv.php?username=ib123&password=gP4HR
 const ESPN_BASE = 'https://site.api.espn.com/apis/site/v2/sports';
 
 const ESPN_LEAGUES = [
-  { id: 'nrl',         url: `${ESPN_BASE}/rugby-league/3/scoreboard`,           emoji: '🏉' },
-  { id: 'afl',         url: `${ESPN_BASE}/australian-football/afl/scoreboard`,  emoji: '🦘' },
-  { id: 'nba',         url: `${ESPN_BASE}/basketball/nba/scoreboard`,           emoji: '🏀' },
-  { id: 'nfl',         url: `${ESPN_BASE}/football/nfl/scoreboard`,             emoji: '🏈' },
-  { id: 'nhl',         url: `${ESPN_BASE}/hockey/nhl/scoreboard`,               emoji: '🏒' },
-  { id: 'mlb',         url: `${ESPN_BASE}/baseball/mlb/scoreboard`,             emoji: '⚾' },
-  { id: 'soccer_epl',  url: `${ESPN_BASE}/soccer/eng.1/scoreboard`,             emoji: '⚽' },
-  { id: 'soccer_ucl',  url: `${ESPN_BASE}/soccer/uefa.champions/scoreboard`,    emoji: '⚽' },
-  { id: 'soccer_mls',  url: `${ESPN_BASE}/soccer/usa.1/scoreboard`,             emoji: '⚽' },
-  { id: 'soccer_esp',  url: `${ESPN_BASE}/soccer/esp.1/scoreboard`,             emoji: '⚽' },
-  { id: 'soccer_ger',  url: `${ESPN_BASE}/soccer/ger.1/scoreboard`,             emoji: '⚽' },
-  { id: 'soccer_ita',  url: `${ESPN_BASE}/soccer/ita.1/scoreboard`,             emoji: '⚽' },
-  { id: 'soccer_aus',  url: `${ESPN_BASE}/soccer/aus.1/scoreboard`,             emoji: '⚽' },
-  { id: 'soccer_fra',  url: `${ESPN_BASE}/soccer/fra.1/scoreboard`,             emoji: '⚽' },
-  { id: 'golf_pga',    url: `${ESPN_BASE}/golf/pga/scoreboard`,                 emoji: '⛳' },
-  { id: 'golf_eur',    url: `${ESPN_BASE}/golf/eur/scoreboard`,                 emoji: '⛳' },
-  { id: 'mma',         url: `${ESPN_BASE}/mma/ufc/scoreboard`,                  emoji: '🥊' },
-  { id: 'f1',          url: `${ESPN_BASE}/racing/f1/scoreboard`,                emoji: '🏎️' },
+  // Rugby League
+  { id: 'nrl',              url: `${ESPN_BASE}/rugby-league/3/scoreboard`,                emoji: '🏉' },
+  // Rugby Union
+  { id: 'rugby_union_sr',   url: `${ESPN_BASE}/rugby-union/267/scoreboard`,               emoji: '🏆' },
+  { id: 'rugby_union_6n',   url: `${ESPN_BASE}/rugby-union/180/scoreboard`,               emoji: '🏆' },
+  { id: 'rugby_union_rc',   url: `${ESPN_BASE}/rugby-union/272/scoreboard`,               emoji: '🏆' },
+  { id: 'rugby_union_pre',  url: `${ESPN_BASE}/rugby-union/269/scoreboard`,               emoji: '🏆' },
+  { id: 'rugby_union_urc',  url: `${ESPN_BASE}/rugby-union/270/scoreboard`,               emoji: '🏆' },
+  // Australian rules
+  { id: 'afl',              url: `${ESPN_BASE}/australian-football/afl/scoreboard`,        emoji: '🦘' },
+  // Basketball
+  { id: 'nba',              url: `${ESPN_BASE}/basketball/nba/scoreboard`,                emoji: '🏀' },
+  // American football
+  { id: 'nfl',              url: `${ESPN_BASE}/football/nfl/scoreboard`,                  emoji: '🏈' },
+  // Ice hockey
+  { id: 'nhl',              url: `${ESPN_BASE}/hockey/nhl/scoreboard`,                    emoji: '🏒' },
+  // Baseball
+  { id: 'mlb',              url: `${ESPN_BASE}/baseball/mlb/scoreboard`,                  emoji: '⚾' },
+  // Club soccer
+  { id: 'soccer_epl',       url: `${ESPN_BASE}/soccer/eng.1/scoreboard`,                  emoji: '⚽' },
+  { id: 'soccer_ucl',       url: `${ESPN_BASE}/soccer/uefa.champions/scoreboard`,         emoji: '⚽' },
+  { id: 'soccer_uel',       url: `${ESPN_BASE}/soccer/uefa.europa/scoreboard`,            emoji: '⚽' },
+  { id: 'soccer_uecl',      url: `${ESPN_BASE}/soccer/uefa.europa.conf/scoreboard`,       emoji: '⚽' },
+  { id: 'soccer_mls',       url: `${ESPN_BASE}/soccer/usa.1/scoreboard`,                  emoji: '⚽' },
+  { id: 'soccer_esp',       url: `${ESPN_BASE}/soccer/esp.1/scoreboard`,                  emoji: '⚽' },
+  { id: 'soccer_ger',       url: `${ESPN_BASE}/soccer/ger.1/scoreboard`,                  emoji: '⚽' },
+  { id: 'soccer_ita',       url: `${ESPN_BASE}/soccer/ita.1/scoreboard`,                  emoji: '⚽' },
+  { id: 'soccer_aus',       url: `${ESPN_BASE}/soccer/aus.1/scoreboard`,                  emoji: '⚽' },
+  { id: 'soccer_fra',       url: `${ESPN_BASE}/soccer/fra.1/scoreboard`,                  emoji: '⚽' },
+  { id: 'soccer_facup',     url: `${ESPN_BASE}/soccer/eng.fa/scoreboard`,                 emoji: '⚽' },
+  { id: 'soccer_efl',       url: `${ESPN_BASE}/soccer/eng.league_cup/scoreboard`,         emoji: '⚽' },
+  // International soccer
+  { id: 'soccer_nations',   url: `${ESPN_BASE}/soccer/uefa.nations/scoreboard`,           emoji: '⚽' },
+  { id: 'soccer_world',     url: `${ESPN_BASE}/soccer/fifa.world/scoreboard`,             emoji: '⚽' },
+  { id: 'soccer_euro',      url: `${ESPN_BASE}/soccer/uefa.euro/scoreboard`,              emoji: '⚽' },
+  { id: 'soccer_copa',      url: `${ESPN_BASE}/soccer/conmebol.copa/scoreboard`,          emoji: '⚽' },
+  { id: 'soccer_afc',       url: `${ESPN_BASE}/soccer/afc.asian.cup/scoreboard`,          emoji: '⚽' },
+  { id: 'soccer_gold',      url: `${ESPN_BASE}/soccer/concacaf.gold/scoreboard`,          emoji: '⚽' },
+  { id: 'soccer_wc_qual_eu',url: `${ESPN_BASE}/soccer/fifa.worldq.europe/scoreboard`,     emoji: '⚽' },
+  // Golf
+  { id: 'golf_pga',         url: `${ESPN_BASE}/golf/pga/scoreboard`,                      emoji: '⛳' },
+  { id: 'golf_eur',         url: `${ESPN_BASE}/golf/eur/scoreboard`,                      emoji: '⛳' },
+  // MMA
+  { id: 'mma',              url: `${ESPN_BASE}/mma/ufc/scoreboard`,                       emoji: '🥊' },
+  // International soccer friendlies / pre-tournament
+  { id: 'soccer_friendly',  url: `${ESPN_BASE}/soccer/fifa.friendly/scoreboard`,          emoji: '⚽' },
+  { id: 'soccer_friendly_m',url: `${ESPN_BASE}/soccer/fifa.friendly.m/scoreboard`,        emoji: '⚽' },
+  // Motorsport
+  { id: 'f1',               url: `${ESPN_BASE}/racing/f1/scoreboard`,                     emoji: '🏎️' },
 ];
 
 const LEAGUE_TO_SPORT = {
-  nrl: 'nrl', afl: 'afl', nba: 'nba', nfl: 'nfl', nhl: 'ice_hockey',
-  mlb: 'baseball', soccer_epl: 'soccer', soccer_ucl: 'soccer',
-  soccer_mls: 'soccer', soccer_esp: 'soccer', soccer_ger: 'soccer',
-  golf_pga: 'golf', golf_eur: 'golf', mma: 'boxing', f1: 'f1',
+  nrl: 'nrl',
+  rugby_union_sr: 'rugby_union', rugby_union_6n: 'rugby_union',
+  rugby_union_rc: 'rugby_union', rugby_union_pre: 'rugby_union', rugby_union_urc: 'rugby_union',
+  afl: 'afl',
+  nba: 'nba',
+  nfl: 'nfl',
+  nhl: 'ice_hockey',
+  mlb: 'baseball',
+  soccer_epl: 'soccer', soccer_ucl: 'soccer', soccer_uel: 'soccer', soccer_uecl: 'soccer',
+  soccer_mls: 'soccer', soccer_esp: 'soccer', soccer_ger: 'soccer', soccer_ita: 'soccer',
+  soccer_aus: 'soccer', soccer_fra: 'soccer', soccer_facup: 'soccer', soccer_efl: 'soccer',
+  soccer_nations: 'soccer', soccer_world: 'soccer', soccer_euro: 'soccer',
+  soccer_copa: 'soccer', soccer_afc: 'soccer', soccer_gold: 'soccer', soccer_wc_qual_eu: 'soccer',
+  soccer_friendly: 'soccer', soccer_friendly_m: 'soccer',
+  golf_pga: 'golf', golf_eur: 'golf',
+  mma: 'boxing',
+  f1: 'f1',
 };
 
 app.use((req, res, next) => {
@@ -121,10 +165,14 @@ async function fetchESPNFixtures() {
     for (const event of events) {
       const state = event.status?.type?.state;
       const competitors = event.competitions?.[0]?.competitors || [];
-      const home = competitors.find(c => c.homeAway === 'home')?.team?.displayName || '';
-      const away = competitors.find(c => c.homeAway === 'away')?.team?.displayName || '';
-      const homeShort = competitors.find(c => c.homeAway === 'home')?.team?.shortDisplayName || '';
-      const awayShort = competitors.find(c => c.homeAway === 'away')?.team?.shortDisplayName || '';
+      const homeTeam = competitors.find(c => c.homeAway === 'home')?.team || {};
+      const awayTeam = competitors.find(c => c.homeAway === 'away')?.team || {};
+      const home = homeTeam.displayName || '';
+      const away = awayTeam.displayName || '';
+      const homeShort = homeTeam.shortDisplayName || '';
+      const awayShort = awayTeam.shortDisplayName || '';
+      const homeLogo = homeTeam.logos?.[0]?.href || homeTeam.logo || '';
+      const awayLogo = awayTeam.logos?.[0]?.href || awayTeam.logo || '';
 
       fixtures.push({
         sportId,
@@ -135,8 +183,9 @@ async function fetchESPNFixtures() {
         away: away.toLowerCase(),
         homeShort: homeShort.toLowerCase(),
         awayShort: awayShort.toLowerCase(),
-        // Clean display name for the grouped card title
         displayName: (home && away) ? `${home} v ${away}` : (event.name || ''),
+        homeLogo,
+        awayLogo,
         isLive: state === 'in',
         isUpcoming: state === 'pre',
         isFinished: state === 'post',
@@ -166,9 +215,13 @@ function isNonLive(title) {
   return NON_LIVE.some(w => t.includes(w));
 }
 
+function stripAccents(s) {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
 function matchFixtureStrict(title) {
   if (!title) return null;
-  const t = title.toLowerCase().replace(/^[^:]+:\s*/, '');
+  const t = stripAccents(title.toLowerCase().replace(/^[^:]+:\s*/, ''));
   for (const fix of fixtureCache) {
     if (fix.name && fix.name.length > 5 && t.includes(fix.name.slice(0, 20))) return fix;
     if (fix.home && fix.away) {
@@ -184,7 +237,7 @@ function matchFixtureStrict(title) {
 
 function matchFixture(title) {
   if (!title) return null;
-  const t = title.toLowerCase().replace(/^[^:]+:\s*/, '');
+  const t = stripAccents(title.toLowerCase().replace(/^[^:]+:\s*/, ''));
 
   for (const fix of fixtureCache) {
     if (fix.name && fix.name.length > 5 && t.includes(fix.name.slice(0, 20))) return fix;
@@ -260,6 +313,8 @@ function classifyProgramme(title) {
     isLive: fix.isLive,
     fixtureKey: fix.isLive ? fix.fixtureKey : null,
     displayName: fix.isLive ? fix.displayName : null,
+    homeLogo: fix.isLive ? fix.homeLogo : null,
+    awayLogo: fix.isLive ? fix.awayLogo : null,
   };
   const kw = keywordSport(title);
   if (kw) return kw;
@@ -313,9 +368,9 @@ async function refresh() {
     const raw = channels.map(ch => {
       const progs = (progsByChannel[ch.id] || []).sort((a,b) => a.start - b.start);
       const nowP = progs.find(p => p.start <= now && p.stop > now);
-     const in24h = new Date(now.getTime() + 24*60*60*1000);
-const next = progs.filter(p => p.start > now && p.start < in24h).slice(0, 2);
-const upcoming = progs.filter(p => p.start > now && p.start < in24h);
+      const in24h = new Date(now.getTime() + 24*60*60*1000);
+      const next = progs.filter(p => p.start > now && p.start < in24h).slice(0, 2);
+      const upcoming = progs.filter(p => p.start > now && p.start < in24h);
       const classified = nowP ? classifyProgramme(nowP.title) : null;
 
       return {
@@ -340,6 +395,8 @@ const upcoming = progs.filter(p => p.start > now && p.start < in24h);
             isLive: false,
             fixtureKey: fix.fixtureKey,
             displayName: fix.displayName,
+            homeLogo: fix.homeLogo,
+            awayLogo: fix.awayLogo,
           };
           return {
             title: p.title, desc: p.desc.slice(0, 100), startRaw: p.startRaw,
@@ -354,9 +411,9 @@ const upcoming = progs.filter(p => p.start > now && p.start < in24h);
 
     cache = deduplicateChannels(raw);
     console.log(`EPG ready — ${raw.length} → ${cache.length} channels`);
- } catch(e) {
+  } catch(e) {
     console.error('Refresh failed:', e.message);
-    setTimeout(refresh, 2 * 60 * 1000); // retry in 2 mins on failure
+    setTimeout(refresh, 2 * 60 * 1000);
     return;
   }
   setTimeout(refresh, 30 * 60 * 1000);
