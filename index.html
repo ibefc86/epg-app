@@ -320,19 +320,14 @@ function groupUpcoming(channels, favSports) {
           startRaw: prog.startRaw,
           espnStartTime: prog.espnStartTime || null,
           effectiveTime,
-          desc: prog.desc,
+          desc: prog.sport?.espnDesc || (isEnglishDesc(prog.desc) ? prog.desc : ''),
           channels: []
         };
       }
       if (!groups[key].channels.find(c => c.id === ch.id)) {
         groups[key].channels.push(ch);
       }
-      if (isEnglishDesc(prog.desc) && !groups[key]._enDesc) {
-        groups[key].desc = prog.desc;
-        groups[key]._enDesc = true;
-      } else if (!groups[key]._enDesc && !isEnglishDesc(groups[key].desc) && prog.desc) {
-        groups[key].desc = '';
-      }
+      if (!groups[key].desc && isEnglishDesc(prog.desc)) groups[key].desc = prog.desc;
       if (!groups[key].startRaw) {
         groups[key].startRaw = prog.startRaw;
       }
@@ -348,25 +343,19 @@ function groupByMatch(filteredChannels) {
     const key = ch.now.sport?.fixtureKey || normaliseTitle(ch.now.title).toLowerCase();
     if (!groups[key]) {
       groups[key] = {
-        // Use ESPN display name if available, otherwise clean EPG title
         title: ch.now.sport?.displayName || normaliseTitle(ch.now.title),
         sport: ch.now.sport,
         isLive: ch.now.isLive,
         pct: ch.now.pct,
         startRaw: ch.now.startRaw,
-        desc: ch.now.desc,
+        desc: ch.now.sport?.espnDesc || (isEnglishDesc(ch.now.desc) ? ch.now.desc : ''),
         channels: []
       };
     }
     groups[key].channels.push(ch);
     if (ch.now.isLive) groups[key].isLive = true;
     if (ch.now.sport?.displayName) groups[key].title = ch.now.sport.displayName;
-    if (isEnglishDesc(ch.now.desc) && !groups[key]._enDesc) {
-      groups[key].desc = ch.now.desc;
-      groups[key]._enDesc = true;
-    } else if (!groups[key]._enDesc && !isEnglishDesc(groups[key].desc) && ch.now.desc) {
-      groups[key].desc = '';
-    }
+    if (!groups[key].desc && isEnglishDesc(ch.now.desc)) groups[key].desc = ch.now.desc;
   }
   return Object.values(groups).sort((a, b) => {
     if (a.isLive && !b.isLive) return -1;

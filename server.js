@@ -173,6 +173,8 @@ async function fetchESPNFixtures() {
       const awayShort = awayTeam.shortDisplayName || '';
       const homeLogo = homeTeam.logos?.[0]?.href || homeTeam.logo || '';
       const awayLogo = awayTeam.logos?.[0]?.href || awayTeam.logo || '';
+      const notes = event.competitions?.[0]?.notes || [];
+      const espnDesc = notes[0]?.headline || event.competitions?.[0]?.situation?.lastPlay?.text || '';
 
       fixtures.push({
         sportId,
@@ -186,6 +188,7 @@ async function fetchESPNFixtures() {
         displayName: (home && away) ? `${home} v ${away}` : (event.name || ''),
         homeLogo,
         awayLogo,
+        espnDesc,
         isLive: state === 'in',
         isUpcoming: state === 'pre',
         isFinished: state === 'post',
@@ -315,6 +318,7 @@ function classifyProgramme(title) {
     displayName: fix.isLive ? fix.displayName : null,
     homeLogo: fix.isLive ? fix.homeLogo : null,
     awayLogo: fix.isLive ? fix.awayLogo : null,
+    espnDesc: fix.espnDesc || null,
   };
   const kw = keywordSport(title);
   if (kw) return kw;
@@ -397,6 +401,7 @@ async function refresh() {
             displayName: fix.displayName,
             homeLogo: fix.homeLogo,
             awayLogo: fix.awayLogo,
+            espnDesc: fix.espnDesc || null,
           };
           return {
             title: p.title, desc: p.desc.slice(0, 100), startRaw: p.startRaw,
