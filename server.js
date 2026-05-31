@@ -337,31 +337,41 @@ async function refresh() {
       )
     ]);
 
-    // Build secondary EPG name → programmes map
+    // Build secondary EPG name → programmes and lcn → programmes maps
     const secondaryByName = {};
+    const secondaryByLcn = {};
     for (const text of secondaryTexts) {
       if (!text) continue;
       const xml2 = new DOMParser().parseFromString(text, 'text/xml');
       const idToName = {};
+      const idToLcn = {};
       for (const c of Array.from(xml2.getElementsByTagName('channel'))) {
         const id = c.getAttribute('id');
         const name = normaliseChannelName(c.getElementsByTagName('display-name')[0]?.textContent || '');
-        if (id && name) idToName[id] = name;
+        const lcn = c.getElementsByTagName('lcn')[0]?.textContent || '';
+        if (id && name) { idToName[id] = name; if (lcn) idToLcn[id] = lcn; }
       }
+      // Build lcn → name lookup
+      const lcnToName = {};
+      for (const [id, lcn] of Object.entries(idToLcn)) lcnToName[lcn] = idToName[id];
+
       for (const p of Array.from(xml2.getElementsByTagName('programme'))) {
-        const name = idToName[p.getAttribute('channel')];
+        const chId = p.getAttribute('channel');
+        const name = idToName[chId];
         if (!name) continue;
         const startRaw = p.getAttribute('start');
         const stopRaw = p.getAttribute('stop');
         const start = parseDate(startRaw);
         const stop = parseDate(stopRaw);
         if (!start || !stop) continue;
+        const prog = { start, stop, startRaw, title: p.getElementsByTagName('title')[0]?.textContent || '', desc: p.getElementsByTagName('desc')[0]?.textContent || '' };
         if (!secondaryByName[name]) secondaryByName[name] = [];
-        secondaryByName[name].push({
-          start, stop, startRaw,
-          title: p.getElementsByTagName('title')[0]?.textContent || '',
-          desc: p.getElementsByTagName('desc')[0]?.textContent || ''
-        });
+        secondaryByName[name].push(prog);
+        const lcn = idToLcn[chId];
+        if (lcn) {
+          if (!secondaryByLcn[lcn]) secondaryByLcn[lcn] = [];
+          secondaryByLcn[lcn].push(prog);
+        }
       }
     }
     const secondaryNames = Object.keys(secondaryByName);
@@ -369,7 +379,10 @@ async function refresh() {
 
     function findSecondaryProgs(normName) {
       if (secondaryByName[normName]) return secondaryByName[normName];
-      // Partial match — secondary name contained in channel name or vice versa
+      // Try matching by number in channel name against LCN
+      const numMatch = normName.match(/\b(\d{3,4})\b/);
+      if (numMatch && secondaryByLcn[numMatch[1]]) return secondaryByLcn[numMatch[1]];
+      // Partial name match
       const match = secondaryNames.find(n => normName.includes(n) || n.includes(normName));
       return match ? secondaryByName[match] : null;
     }
