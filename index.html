@@ -437,9 +437,33 @@ function hexToRgb(hex) {
   return `${r},${g},${b}`;
 }
 
+const SPORT_FALLBACK_COLORS = {
+  soccer:      ['#1a7a3c', '#0d47a1'],
+  nrl:         ['#1e3a5f', '#c41e3a'],
+  afl:         ['#0047ab', '#8b0000'],
+  nba:         ['#1d428a', '#c8102e'],
+  nfl:         ['#013369', '#d50a0a'],
+  ice_hockey:  ['#003087', '#6b6b6b'],
+  baseball:    ['#003831', '#bd3039'],
+  cricket:     ['#2d5a27', '#8b6914'],
+  rugby_union: ['#1f4e1f', '#8b1a1a'],
+  golf:        ['#1a6b1a', '#0d4a0d'],
+  boxing:      ['#8b0000', '#00008b'],
+  f1:          ['#e10600', '#ff8000'],
+  racing:      ['#e10600', '#ff6b00'],
+  cycling:     ['#e6b800', '#0060cc'],
+  tennis:      ['#4a7c00', '#00539b'],
+  olympic:     ['#0085c7', '#df0024'],
+};
+
 function cardGradient(sport, isLive) {
-  const homeRgb = hexToRgb(sport?.homeColor);
-  const awayRgb = hexToRgb(sport?.awayColor);
+  let homeRgb = hexToRgb(sport?.homeColor);
+  let awayRgb = hexToRgb(sport?.awayColor);
+  // Fall back to sport-specific palette when ESPN has no team colors
+  if (!homeRgb && !awayRgb && sport?.sportId) {
+    const fb = SPORT_FALLBACK_COLORS[sport.sportId];
+    if (fb) { homeRgb = hexToRgb(fb[0]); awayRgb = hexToRgb(fb[1]); }
+  }
   if (!homeRgb && !awayRgb) return '';
   const a = isLive ? 0.28 : 0.20;
   if (homeRgb && awayRgb) {
