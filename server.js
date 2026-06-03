@@ -151,12 +151,20 @@ function deduplicateChannels(channels) {
 
 async function fetchESPNFixtures() {
   const fixtures = [];
-  const results = await Promise.allSettled(
-    ESPN_LEAGUES.map(league =>
-      axios.get(league.url, { timeout: 10000 })
+  const d = (offset) => {
+    const d = new Date(Date.now() + offset * 864e5);
+    return d.toISOString().slice(0,10).replace(/-/g,'');
+  };
+  const dates = [d(0), d(1), d(2)]; // today + next 2 days
+
+  const requests = ESPN_LEAGUES.flatMap(league =>
+    dates.map(date =>
+      axios.get(`${league.url}?dates=${date}`, { timeout: 10000 })
         .then(res => ({ league, data: res.data }))
+        .catch(() => null)
     )
   );
+  const results = await Promise.allSettled(requests);
 
   for (const result of results) {
     if (result.status !== 'fulfilled') continue;
@@ -204,9 +212,15 @@ async function fetchESPNFixtures() {
     }
   }
 
-  fixtureCache = fixtures;
-  const live = fixtures.filter(f => f.isLive).length;
-  console.log(`Loaded ${fixtures.length} fixtures (${live} live) from ESPN`);
+  // Deduplicate by fixtureKey — same game can appear across multiple date queries
+  const seen = new Set();
+  fixtureCache = fixtures.filter(f => {
+    if (seen.has(f.fixtureKey)) return false;
+    seen.add(f.fixtureKey);
+    return true;
+  });
+  const live = fixtureCache.filter(f => f.isLive).length;
+  console.log(`Loaded ${fixtureCache.length} fixtures (${live} live) from ESPN`);
 }
 
 const NON_LIVE = [
