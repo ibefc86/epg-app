@@ -479,32 +479,35 @@ async function refresh() {
     const epgText = await axios.get(EPG_URL, { timeout: 120000, responseType: 'text' }).then(r => r.data);
 
     console.log('Parsing EPG XML...');
-    const xml = new DOMParser().parseFromString(epgText, 'text/xml');
     const now = new Date();
+    const cutoff = new Date(now.getTime() + 48 * 60 * 60 * 1000);
 
-    const channels = Array.from(xml.getElementsByTagName('channel')).map(c => ({
-      id: c.getAttribute('id'),
-      name: c.getElementsByTagName('display-name')[0]?.textContent || c.getAttribute('id'),
-      logo: c.getElementsByTagName('icon')[0]?.getAttribute('src') || '',
-      lang: c.getElementsByTagName('display-name')[0]?.getAttribute('lang') || ''
-    }));
-
-    const allProgs = Array.from(xml.getElementsByTagName('programme')).map(p => {
-      const startRaw = p.getAttribute('start');
-      const stopRaw = p.getAttribute('stop');
-      return {
-        channel: p.getAttribute('channel'),
-        start: parseDate(startRaw), stop: parseDate(stopRaw), startRaw,
-        title: p.getElementsByTagName('title')[0]?.textContent || '',
-        desc: p.getElementsByTagName('desc')[0]?.textContent || ''
-      };
-    }).filter(p => p.start && p.stop);
-
+    // Fast regex-based parser — avoids building a DOM, far lower memory usage
+    const channels = [];
     const progsByChannel = {};
-    allProgs.forEach(p => {
-      if (!progsByChannel[p.channel]) progsByChannel[p.channel] = [];
-      progsByChannel[p.channel].push(p);
-    });
+
+    const chRe = /<channel\s[^>]*id="([^"]+)"[^>]*>([\s\S]*?)<\/channel>/g;
+    let m;
+    while ((m = chRe.exec(epgText)) !== null) {
+      const id = m[1], blk = m[2];
+      const nm = blk.match(/<display-name[^>]*>([^<]+)<\/display-name>/);
+      const lg = blk.match(/<icon\s[^>]*src="([^"]+)"/);
+      const la = blk.match(/<display-name[^>]*\slang="([^"]*)"/);
+      if (nm) channels.push({ id, name: nm[1].trim(), logo: lg ? lg[1] : '', lang: la ? la[1] : '' });
+    }
+
+    const pRe = /<programme\s[^>]*channel="([^"]+)"\s[^>]*start="([^"]+)"\s[^>]*stop="([^"]+)"[^>]*>([\s\S]*?)<\/programme>/g;
+    while ((m = pRe.exec(epgText)) !== null) {
+      const chId = m[1], startRaw = m[2], stopRaw = m[3], body = m[4];
+      const start = parseDate(startRaw), stop = parseDate(stopRaw);
+      if (!start || !stop || stop < now || start > cutoff) continue;
+      const tm = body.match(/<title[^>]*>([^<]+)<\/title>/);
+      if (!tm) continue;
+      const dm = body.match(/<desc[^>]*>([\s\S]*?)<\/desc>/);
+      if (!progsByChannel[chId]) progsByChannel[chId] = [];
+      progsByChannel[chId].push({ channel: chId, start, stop, startRaw, title: tm[1].trim(), desc: dm ? dm[1].trim().slice(0, 150) : '' });
+    }
+    console.log(`Parsed ${channels.length} channels, ${Object.values(progsByChannel).reduce((a,v)=>a+v.length,0)} programmes (48h window)`);
 
     const raw = channels.map(ch => buildChannelData(ch, progsByChannel[ch.id] || [], now));
 
