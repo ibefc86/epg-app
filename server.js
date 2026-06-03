@@ -167,7 +167,7 @@ async function fetchESPNFixtures() {
   const results = await Promise.allSettled(requests);
 
   for (const result of results) {
-    if (result.status !== 'fulfilled') continue;
+    if (result.status !== 'fulfilled' || !result.value) continue;
     const { league, data } = result.value;
     const events = data?.events || [];
     const sportId = LEAGUE_TO_SPORT[league.id] || league.id;
