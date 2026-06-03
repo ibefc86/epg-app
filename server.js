@@ -380,12 +380,16 @@ function parseXmltvFast(text) {
     if (nm) { idToName[id] = normaliseChannelName(nm[1]); if (lc) idToLcn[id] = lc[1]; }
   }
 
-  // Extract programmes
-  const pRe = /<programme\s[^>]*channel="([^"]+)"\s[^>]*start="([^"]+)"\s[^>]*stop="([^"]+)"[^>]*>([\s\S]*?)<\/programme>/g;
+  // Extract programmes — order-independent attribute matching
+  const pRe = /<programme\b([^>]+)>([\s\S]*?)<\/programme>/g;
   while ((m = pRe.exec(text)) !== null) {
-    const name = idToName[m[1]];
+    const attrs = m[1], body = m[2];
+    const chId = (attrs.match(/\bchannel="([^"]+)"/) || [])[1];
+    const startRaw = (attrs.match(/\bstart="([^"]+)"/) || [])[1];
+    const stopRaw = (attrs.match(/\bstop="([^"]+)"/) || [])[1];
+    if (!chId || !startRaw || !stopRaw) continue;
+    const name = idToName[chId];
     if (!name) continue;
-    const startRaw = m[2], stopRaw = m[3], body = m[4];
     const tm = body.match(/<title[^>]*>([^<]+)<\/title>/);
     if (!tm) continue;
     const title = tm[1].trim();
@@ -396,7 +400,7 @@ function parseXmltvFast(text) {
     const prog = { start, stop, startRaw, title, desc: dm ? dm[1].trim().slice(0, 150) : '' };
     if (!byName[name]) byName[name] = [];
     byName[name].push(prog);
-    const lcn = idToLcn[m[1]];
+    const lcn = idToLcn[chId];
     if (lcn) { if (!byLcn[lcn]) byLcn[lcn] = []; byLcn[lcn].push(prog); }
   }
 
@@ -427,7 +431,8 @@ async function fillSecondaryEPG(channels, emptyIds) {
       for (const [k, v] of Object.entries(byLcn)) {
         if (!secondaryByLcn[k]) secondaryByLcn[k] = v;
       }
-      console.log(`Secondary EPG loaded: ${url.split('/').pop()} — ${channelCount} channels`);
+      const progCount = Object.values(byName).reduce((a,v) => a+v.length, 0);
+      console.log(`Secondary EPG loaded: ${url.split('/').pop()} — ${channelCount} channels, ${progCount} programmes`);
     } catch(e) {
       console.error(`Secondary EPG failed (${url.split('/').pop()}):`, e.message);
     }
