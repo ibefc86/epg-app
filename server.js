@@ -496,9 +496,13 @@ async function refresh() {
       if (nm) channels.push({ id, name: nm[1].trim(), logo: lg ? lg[1] : '', lang: la ? la[1] : '' });
     }
 
-    const pRe = /<programme\s[^>]*channel="([^"]+)"\s[^>]*start="([^"]+)"\s[^>]*stop="([^"]+)"[^>]*>([\s\S]*?)<\/programme>/g;
+    const pRe = /<programme\b([^>]+)>([\s\S]*?)<\/programme>/g;
     while ((m = pRe.exec(epgText)) !== null) {
-      const chId = m[1], startRaw = m[2], stopRaw = m[3], body = m[4];
+      const attrs = m[1], body = m[2];
+      const chId = (attrs.match(/\bchannel="([^"]+)"/) || [])[1];
+      const startRaw = (attrs.match(/\bstart="([^"]+)"/) || [])[1];
+      const stopRaw = (attrs.match(/\bstop="([^"]+)"/) || [])[1];
+      if (!chId || !startRaw || !stopRaw) continue;
       const start = parseDate(startRaw), stop = parseDate(stopRaw);
       if (!start || !stop || stop < now || start > cutoff) continue;
       const tm = body.match(/<title[^>]*>([^<]+)<\/title>/);
