@@ -365,8 +365,46 @@ function buildChannelData(ch, progs, now) {
   };
 }
 
-async function fillSecondaryEPG(channels, progsByChannel) {
-  const emptyChannels = channels.filter(ch => !(progsByChannel[ch.id] || []).length);
+// Fast regex-based XMLTV parser — avoids building a DOM tree, much lower memory usage
+function parseXmltvFast(text) {
+  const idToName = {}, idToLcn = {};
+  const byName = {}, byLcn = {};
+
+  // Extract channels
+  const chRe = /<channel\s[^>]*id="([^"]+)"[^>]*>([\s\S]*?)<\/channel>/g;
+  let m;
+  while ((m = chRe.exec(text)) !== null) {
+    const id = m[1], block = m[2];
+    const nm = block.match(/<display-name[^>]*>([^<]+)<\/display-name>/);
+    const lc = block.match(/<lcn[^>]*>(\d+)<\/lcn>/);
+    if (nm) { idToName[id] = normaliseChannelName(nm[1]); if (lc) idToLcn[id] = lc[1]; }
+  }
+
+  // Extract programmes
+  const pRe = /<programme\s[^>]*channel="([^"]+)"\s[^>]*start="([^"]+)"\s[^>]*stop="([^"]+)"[^>]*>([\s\S]*?)<\/programme>/g;
+  while ((m = pRe.exec(text)) !== null) {
+    const name = idToName[m[1]];
+    if (!name) continue;
+    const startRaw = m[2], stopRaw = m[3], body = m[4];
+    const tm = body.match(/<title[^>]*>([^<]+)<\/title>/);
+    if (!tm) continue;
+    const title = tm[1].trim();
+    if (!title || /^no listing|^no data|^tba$|^tbd$/i.test(title)) continue;
+    const start = parseDate(startRaw), stop = parseDate(stopRaw);
+    if (!start || !stop) continue;
+    const dm = body.match(/<desc[^>]*>([^<]+)<\/desc>/);
+    const prog = { start, stop, startRaw, title, desc: dm ? dm[1].trim().slice(0, 150) : '' };
+    if (!byName[name]) byName[name] = [];
+    byName[name].push(prog);
+    const lcn = idToLcn[m[1]];
+    if (lcn) { if (!byLcn[lcn]) byLcn[lcn] = []; byLcn[lcn].push(prog); }
+  }
+
+  return { byName, byLcn, channelCount: Object.keys(idToName).length };
+}
+
+async function fillSecondaryEPG(channels, emptyIds) {
+  const emptyChannels = channels.filter(ch => emptyIds.has(ch.id));
   if (!emptyChannels.length) return;
   console.log(`Secondary EPG: filling ${emptyChannels.length} empty channels...`);
 
@@ -379,34 +417,17 @@ async function fillSecondaryEPG(channels, progsByChannel) {
       let text = gzip
         ? await new Promise((res, rej) => zlib.gunzip(raw.data, (e, d) => e ? rej(e) : res(d.toString('utf8'))))
         : raw.data.toString('utf8');
-      text = text.replace(/^﻿/, '').trimStart(); // strip BOM and leading whitespace
+      text = text.replace(/^﻿/, '').trimStart();
 
-      const xml2 = new DOMParser().parseFromString(text, 'text/xml');
-      const idToName = {}, idToLcn = {};
-      for (const c of Array.from(xml2.getElementsByTagName('channel'))) {
-        const id = c.getAttribute('id');
-        const name = normaliseChannelName(c.getElementsByTagName('display-name')[0]?.textContent || '');
-        const lcn = c.getElementsByTagName('lcn')[0]?.textContent || '';
-        if (id && name) { idToName[id] = name; if (lcn) idToLcn[id] = lcn; }
+      const { byName, byLcn, channelCount } = parseXmltvFast(text);
+      // Merge into combined maps
+      for (const [k, v] of Object.entries(byName)) {
+        if (!secondaryByName[k]) secondaryByName[k] = v;
       }
-      for (const p of Array.from(xml2.getElementsByTagName('programme'))) {
-        const chId = p.getAttribute('channel');
-        const name = idToName[chId];
-        if (!name) continue;
-        const startRaw = p.getAttribute('start'), stopRaw = p.getAttribute('stop');
-        const start = parseDate(startRaw), stop = parseDate(stopRaw);
-        if (!start || !stop) continue;
-        const title = p.getElementsByTagName('title')[0]?.textContent || '';
-        if (!title || /^no listing|^no data|^tba$|^tbd$/i.test(title.trim())) continue;
-        const prog = { start, stop, startRaw, title, desc: p.getElementsByTagName('desc')[0]?.textContent || '' };
-        if (!secondaryByName[name]) secondaryByName[name] = [];
-        secondaryByName[name].push(prog);
-        const lcn = idToLcn[chId];
-        if (lcn) { if (!secondaryByLcn[lcn]) secondaryByLcn[lcn] = []; secondaryByLcn[lcn].push(prog); }
+      for (const [k, v] of Object.entries(byLcn)) {
+        if (!secondaryByLcn[k]) secondaryByLcn[k] = v;
       }
-      const chCount = Object.keys(idToName).length;
-      const foxKeys = Object.keys(secondaryByName).filter(n => n.includes('fox'));
-      console.log(`Secondary EPG loaded: ${url.split('/').pop()} — ${chCount} channels, fox channels: ${foxKeys.join(', ')}`);
+      console.log(`Secondary EPG loaded: ${url.split('/').pop()} — ${channelCount} channels`);
     } catch(e) {
       console.error(`Secondary EPG failed (${url.split('/').pop()}):`, e.message);
     }
@@ -487,10 +508,14 @@ async function refresh() {
 
     const raw = channels.map(ch => buildChannelData(ch, progsByChannel[ch.id] || [], now));
 
+    // Free large objects before secondary EPG starts
+    const channelsCopy = channels.map(ch => ({ id: ch.id, name: ch.name, lang: ch.lang, logo: ch.logo, quality: ch.quality }));
+    const emptyIds = new Set(channelsCopy.filter(ch => !(progsByChannel[ch.id] || []).length).map(ch => ch.id));
+
     cache = deduplicateChannels(raw);
     console.log(`EPG ready — ${raw.length} → ${cache.length} channels`);
     // Fill missing channels from secondary EPG in background (non-blocking)
-    fillSecondaryEPG(channels, progsByChannel).catch(e => console.error('Secondary EPG error:', e.message));
+    fillSecondaryEPG(channelsCopy, emptyIds).catch(e => console.error('Secondary EPG error:', e.message));
   } catch(e) {
     console.error('Refresh failed:', e.message);
     setTimeout(refresh, 2 * 60 * 1000);
