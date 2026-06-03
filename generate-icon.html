@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+<head><title>Deux Live Sport — Icon Generator</title></head>
+<body style="background:#111;display:flex;flex-direction:column;align-items:center;padding:40px;gap:24px;font-family:-apple-system,sans-serif;color:#fff">
+<h2 style="font-size:18px;font-weight:600;letter-spacing:-0.3px">Deux Live Sport — Icon</h2>
+<canvas id="c" width="1024" height="1024" style="border-radius:22.5%;width:240px;height:240px;box-shadow:0 8px 40px rgba(0,0,0,0.6)"></canvas>
+<div style="display:flex;gap:12px">
+  <button onclick="download(180)" style="padding:10px 22px;background:#3b82f6;border:none;border-radius:10px;color:#fff;cursor:pointer;font-size:14px;font-weight:600">Download 180×180 (iOS)</button>
+  <button onclick="download(512)" style="padding:10px 22px;background:#444;border:none;border-radius:10px;color:#fff;cursor:pointer;font-size:14px;font-weight:600">Download 512×512</button>
+</div>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const S = 1024;
+
+function draw() {
+  ctx.clearRect(0, 0, S, S);
+
+  // Background gradient — deep navy to rich purple
+  const bg = ctx.createLinearGradient(0, 0, S, S);
+  bg.addColorStop(0, '#0a0e27');
+  bg.addColorStop(0.5, '#1a0533');
+  bg.addColorStop(1, '#0d1a3a');
+  ctx.fillStyle = bg;
+  ctx.roundRect(0, 0, S, S, S * 0.22);
+  ctx.fill();
+
+  // Colourful light sweep across top-left
+  const sweep = ctx.createRadialGradient(S*0.2, S*0.15, 0, S*0.2, S*0.15, S*0.7);
+  sweep.addColorStop(0, 'rgba(99,102,241,0.35)');
+  sweep.addColorStop(0.5, 'rgba(236,72,153,0.12)');
+  sweep.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = sweep;
+  ctx.roundRect(0, 0, S, S, S * 0.22);
+  ctx.fill();
+
+  // Bottom-right warm accent
+  const warm = ctx.createRadialGradient(S*0.85, S*0.88, 0, S*0.85, S*0.88, S*0.55);
+  warm.addColorStop(0, 'rgba(251,146,60,0.25)');
+  warm.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = warm;
+  ctx.roundRect(0, 0, S, S, S * 0.22);
+  ctx.fill();
+
+  // "DEUX" — bold, large
+  ctx.save();
+  ctx.font = `900 ${S*0.28}px -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  // Text gradient — white to soft purple-white
+  const tg = ctx.createLinearGradient(0, S*0.28, 0, S*0.56);
+  tg.addColorStop(0, '#ffffff');
+  tg.addColorStop(1, 'rgba(200,190,255,0.9)');
+  ctx.fillStyle = tg;
+  ctx.fillText('DEUX', S*0.5, S*0.4);
+  ctx.restore();
+
+  // Divider line with gradient
+  const line = ctx.createLinearGradient(S*0.15, 0, S*0.85, 0);
+  line.addColorStop(0, 'rgba(255,255,255,0)');
+  line.addColorStop(0.3, 'rgba(99,102,241,0.8)');
+  line.addColorStop(0.7, 'rgba(236,72,153,0.8)');
+  line.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.strokeStyle = line;
+  ctx.lineWidth = S * 0.008;
+  ctx.beginPath();
+  ctx.moveTo(S * 0.15, S * 0.58);
+  ctx.lineTo(S * 0.85, S * 0.58);
+  ctx.stroke();
+
+  // "LIVE" pill — vibrant red
+  // "LIVE" pill — centred on its own row
+  const pillW = S * 0.28, pillH = S * 0.105, pillX = S * 0.5 - pillW/2, pillY = S * 0.635;
+  ctx.save();
+  ctx.fillStyle = '#ef4444';
+  ctx.shadowColor = 'rgba(239,68,68,0.6)';
+  ctx.shadowBlur = S * 0.03;
+  ctx.beginPath();
+  ctx.roundRect(pillX, pillY, pillW, pillH, pillH/2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // Dot in pill
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(pillX + pillH*0.55, pillY + pillH*0.5, pillH*0.17, 0, Math.PI*2);
+  ctx.fill();
+
+  // LIVE text in pill
+  ctx.font = `800 ${S*0.07}px -apple-system, sans-serif`;
+  ctx.fillStyle = '#fff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.letterSpacing = `${S*0.004}px`;
+  ctx.fillText('LIVE', pillX + pillW*0.6, pillY + pillH*0.5);
+  ctx.restore();
+
+  // "SPORT" text — centred row below the pill
+  ctx.save();
+  ctx.font = `700 ${S*0.13}px -apple-system, BlinkMacSystemFont, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.letterSpacing = `${S*0.012}px`;
+  const sg = ctx.createLinearGradient(S*0.28, 0, S*0.72, 0);
+  sg.addColorStop(0, 'rgba(165,180,252,1)');
+  sg.addColorStop(1, 'rgba(251,146,60,0.95)');
+  ctx.fillStyle = sg;
+  ctx.fillText('SPORT', S * 0.5, S * 0.81);
+  ctx.restore();
+
+  // Subtle star/sparkle accents
+  [[S*0.82, S*0.18, 18], [S*0.12, S*0.78, 12], [S*0.88, S*0.72, 10]].forEach(([x,y,r]) => {
+    ctx.save();
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  });
+}
+
+draw();
+
+function download(size) {
+  const out = document.createElement('canvas');
+  out.width = size; out.height = size;
+  const octx = out.getContext('2d');
+  octx.drawImage(canvas, 0, 0, size, size);
+  const a = document.createElement('a');
+  a.download = `icon-${size}.png`;
+  a.href = out.toDataURL('image/png');
+  a.click();
+}
+</script>
+</body>
+</html>
