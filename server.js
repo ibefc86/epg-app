@@ -213,12 +213,20 @@ async function fetchESPNFixtures() {
   }
 
   // Deduplicate by fixtureKey — same game can appear across multiple date queries
-  const seen = new Set();
-  fixtureCache = fixtures.filter(f => {
-    if (seen.has(f.fixtureKey)) return false;
-    seen.add(f.fixtureKey);
-    return true;
-  });
+  // (playoff series return projected future dates). Prefer live, then earliest start.
+  const byKey = {};
+  for (const f of fixtures) {
+    const existing = byKey[f.fixtureKey];
+    if (!existing) { byKey[f.fixtureKey] = f; continue; }
+    // Live always wins
+    if (f.isLive && !existing.isLive) { byKey[f.fixtureKey] = f; continue; }
+    if (!f.isLive && existing.isLive) continue;
+    // Otherwise keep the earliest scheduled start
+    const ft = f.espnStartTime ? new Date(f.espnStartTime).getTime() : Infinity;
+    const et = existing.espnStartTime ? new Date(existing.espnStartTime).getTime() : Infinity;
+    if (ft < et) byKey[f.fixtureKey] = f;
+  }
+  fixtureCache = Object.values(byKey);
   const live = fixtureCache.filter(f => f.isLive).length;
   console.log(`Loaded ${fixtureCache.length} fixtures (${live} live) from ESPN`);
 }
