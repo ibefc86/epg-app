@@ -156,10 +156,13 @@ async function fetchESPNFixtures() {
     return d.toISOString().slice(0,10).replace(/-/g,'');
   };
   const dates = [d(0), d(1), d(2)]; // today + next 2 days
+  // Empty string = plain scoreboard (no date filter) — reflects true LIVE state,
+  // which the date-filtered playoff queries don't (they return projected future games).
+  const dateParams = ['', ...dates.map(date => `?dates=${date}`)];
 
   const requests = ESPN_LEAGUES.flatMap(league =>
-    dates.map(date =>
-      axios.get(`${league.url}?dates=${date}`, { timeout: 10000 })
+    dateParams.map(param =>
+      axios.get(`${league.url}${param}`, { timeout: 10000 })
         .then(res => ({ league, data: res.data }))
         .catch(() => null)
     )
