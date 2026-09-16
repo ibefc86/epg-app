@@ -6,6 +6,15 @@ const { DOMParser } = require('@xmldom/xmldom');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Crash guards — log and keep running instead of letting the process exit.
+// A single malformed upstream response or network blip must not take the app offline.
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', err && err.stack ? err.stack : err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[unhandledRejection]', reason && reason.stack ? reason.stack : reason);
+});
+
 const EPG_URL = 'https://305.halfvex.com/xmltv.php?username=ib123&password=gP4HRjkXrc';
 const EPG_SECONDARY_URLS = [
   { url: 'https://epgshare01.online/epgshare01/epg_ripper_AU1.xml.gz', gzip: true },
@@ -149,29 +158,55 @@ function deduplicateChannels(channels) {
   return result;
 }
 
-async function fetchESPNFixtures() {
-  const fixtures = [];
-  const d = (offset) => {
-    const d = new Date(Date.now() + offset * 864e5);
-    return d.toISOString().slice(0,10).replace(/-/g,'');
-  };
-  const dates = [d(0), d(1), d(2)]; // today + next 2 days
-  // Empty string = plain scoreboard (no date filter) — reflects true LIVE state,
-  // which the date-filtered playoff queries don't (they return projected future games).
-  const dateParams = ['', ...dates.map(date => `?dates=${date}`)];
+// Run async tasks in small batches to cap concurrency (avoids a request storm)
+async function runBatched(items, worker, batchSize = 8) {
+  const out = [];
+  for (let i = 0; i < items.length; i += batchSize) {
+    const slice = items.slice(i, i + batchSize);
+    out.push(...await Promise.all(slice.map(worker)));
+  }
+  return out;
+}
 
-  const requests = ESPN_LEAGUES.flatMap(league =>
-    dateParams.map(param =>
-      axios.get(`${league.url}${param}`, { timeout: 10000 })
+// Dated queries change slowly (upcoming schedule); cache them and refresh only occasionally.
+let datedFixturesRaw = [];
+let lastDatedFetch = 0;
+
+// full=true also refreshes the dated (upcoming) queries; otherwise only the live scoreboard.
+async function fetchESPNFixtures(full = false) {
+  const d = (offset) => {
+    const dt = new Date(Date.now() + offset * 864e5);
+    return dt.toISOString().slice(0,10).replace(/-/g,'');
+  };
+
+  // Always fetch the plain scoreboard for every league — this reflects true LIVE state.
+  const plainResults = await runBatched(ESPN_LEAGUES, league =>
+    axios.get(league.url, { timeout: 10000 })
+      .then(res => ({ league, data: res.data }))
+      .catch(() => null)
+  );
+
+  // Refresh dated (upcoming) queries only on a full pass, or if we have none yet.
+  if (full || !datedFixturesRaw.length || Date.now() - lastDatedFetch > 15 * 60 * 1000) {
+    const dates = [d(0), d(1), d(2)]; // today + next 2 days
+    const datedReqs = ESPN_LEAGUES.flatMap(league =>
+      dates.map(date => ({ league, url: `${league.url}?dates=${date}` }))
+    );
+    const datedResults = await runBatched(datedReqs, ({ league, url }) =>
+      axios.get(url, { timeout: 10000 })
         .then(res => ({ league, data: res.data }))
         .catch(() => null)
-    )
-  );
-  const results = await Promise.allSettled(requests);
+    );
+    datedFixturesRaw = datedResults.filter(Boolean);
+    lastDatedFetch = Date.now();
+  }
 
-  for (const result of results) {
-    if (result.status !== 'fulfilled' || !result.value) continue;
-    const { league, data } = result.value;
+  const allResults = [...plainResults.filter(Boolean), ...datedFixturesRaw];
+  const fixtures = [];
+
+  for (const result of allResults) {
+    if (!result) continue;
+    const { league, data } = result;
     const events = data?.events || [];
     const sportId = LEAGUE_TO_SPORT[league.id] || league.id;
 
@@ -494,17 +529,17 @@ async function fillSecondaryEPG(channels, emptyIds) {
 
 async function refreshFixtures() {
   try {
-    await fetchESPNFixtures();
+    await fetchESPNFixtures(false); // light: live scoreboard only (dated queries reused from cache)
   } catch(e) {
     console.error('Fixture refresh failed:', e.message);
   }
-  setTimeout(refreshFixtures, 60 * 1000);
+  setTimeout(refreshFixtures, 3 * 60 * 1000); // every 3 min instead of 60s
 }
 
 async function refresh() {
   try {
     console.log('Fetching fixtures first...');
-    await fetchESPNFixtures();
+    await fetchESPNFixtures(true); // full: refresh dated upcoming queries too
     console.log('Fetching EPG...');
     const epgText = await axios.get(EPG_URL, { timeout: 120000, responseType: 'text' }).then(r => r.data);
 
