@@ -15,6 +15,18 @@ process.on('unhandledRejection', (reason) => {
   console.error('[unhandledRejection]', reason && reason.stack ? reason.stack : reason);
 });
 
+// Memory instrumentation — if the process is OOM-killed, the last line printed
+// tells us how high RSS/heap climbed just before it died.
+function memMB() {
+  const m = process.memoryUsage();
+  return { rss: Math.round(m.rss/1048576), heap: Math.round(m.heapUsed/1048576), ext: Math.round(m.external/1048576) };
+}
+function logMem(tag) {
+  const m = memMB();
+  console.log(`[mem${tag ? ' ' + tag : ''}] rss=${m.rss}MB heap=${m.heap}MB ext=${m.ext}MB`);
+}
+setInterval(() => logMem('tick'), 30 * 1000);
+
 const EPG_URL = 'https://305.halfvex.com/xmltv.php?username=ib123&password=gP4HRjkXrc';
 const EPG_SECONDARY_URLS = [
   { url: 'https://epgshare01.online/epgshare01/epg_ripper_AU1.xml.gz', gzip: true },
@@ -538,6 +550,7 @@ async function refreshFixtures() {
 
 async function refresh() {
   try {
+    logMem('refresh:start');
     console.log('Fetching fixtures first...');
     await fetchESPNFixtures(true); // full: refresh dated upcoming queries too
     console.log('Fetching EPG...');
@@ -545,7 +558,8 @@ async function refresh() {
 
     console.log('Parsing EPG XML...');
     const now = new Date();
-    const cutoff = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+    // App only uses "now" + next 24h; keep a small buffer. Smaller window = far less memory.
+    const cutoff = new Date(now.getTime() + 26 * 60 * 60 * 1000);
 
     // Fast regex-based parser — avoids building a DOM, far lower memory usage
     const channels = [];
@@ -586,8 +600,11 @@ async function refresh() {
 
     cache = deduplicateChannels(raw);
     console.log(`EPG ready — ${raw.length} → ${cache.length} channels`);
+    logMem('refresh:done');
     // Fill missing channels from secondary EPG in background (non-blocking)
-    fillSecondaryEPG(channelsCopy, emptyIds).catch(e => console.error('Secondary EPG error:', e.message));
+    fillSecondaryEPG(channelsCopy, emptyIds)
+      .then(() => logMem('secondary:done'))
+      .catch(e => console.error('Secondary EPG error:', e.message));
   } catch(e) {
     console.error('Refresh failed:', e.message);
     setTimeout(refresh, 2 * 60 * 1000);
