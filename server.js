@@ -2,7 +2,6 @@ const express = require('express');
 const axios = require('axios');
 const path = require('path');
 const zlib = require('zlib');
-const { DOMParser } = require('@xmldom/xmldom');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
@@ -15,19 +14,16 @@ process.on('unhandledRejection', (reason) => {
   console.error('[unhandledRejection]', reason && reason.stack ? reason.stack : reason);
 });
 
-// Memory instrumentation — if the process is OOM-killed, the last line printed
-// tells us how high RSS/heap climbed just before it died.
-function memMB() {
-  const m = process.memoryUsage();
-  return { rss: Math.round(m.rss/1048576), heap: Math.round(m.heapUsed/1048576), ext: Math.round(m.external/1048576) };
-}
+// Lightweight memory logging at refresh boundaries (heap should stay ~100MB).
 function logMem(tag) {
-  const m = memMB();
-  console.log(`[mem${tag ? ' ' + tag : ''}] rss=${m.rss}MB heap=${m.heap}MB ext=${m.ext}MB`);
+  const m = process.memoryUsage();
+  console.log(`[mem${tag ? ' ' + tag : ''}] rss=${Math.round(m.rss/1048576)}MB heap=${Math.round(m.heapUsed/1048576)}MB`);
 }
-setInterval(() => logMem('tick'), 30 * 1000);
 
-const EPG_URL = 'https://305.halfvex.com/xmltv.php?username=ib123&password=gP4HRjkXrc';
+// EPG provider URL comes from the environment (contains credentials — never hardcode).
+// Set EPG_URL in Railway and locally (export EPG_URL='https://.../xmltv.php?username=...').
+const EPG_URL = process.env.EPG_URL;
+if (!EPG_URL) console.error('FATAL: EPG_URL environment variable is not set — the EPG will not load.');
 const EPG_SECONDARY_URLS = [
   { url: 'https://epgshare01.online/epgshare01/epg_ripper_AU1.xml.gz', gzip: true },
   { url: 'https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/au/Sydney/epg.xml', gzip: false },
@@ -148,6 +144,21 @@ function normaliseChannelName(name) {
   return name
     .replace(/\s*(4K|UHD|FHD|HEVC HB|HEVC LB|HEVC|1080p|720p|480p|576p|2160p|HD|\+1|\+2|SD|HB|LB|\(1080p\)|\(720p\)|\(480p\))\s*/gi, ' ')
     .replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+// This is a live-sport app: dedicated sport channels are the ones worth keeping.
+// A name match here means we retain the channel even when its current programme
+// doesn't classify (e.g. a talk show on Fox League at 3am).
+const SPORT_CHANNEL_RE = new RegExp([
+  'sport', 'fox footy', 'fox league', 'fox cricket', 'fox sports', 'sky sport',
+  'espn', 'bein', 'tnt sport', 'eurosport', 'kayo', 'optus sport', 'stan sport',
+  'premier sport', 'supersport', 'dazn', 'viaplay', 'willow', 'racing', 'golf',
+  'nba tv', 'nba league', ' nfl', ' mlb', ' nhl', 'motorsport', 'sky racing',
+  'setanta', 'ssc', 'flosports', 'bt sport'
+].join('|'), 'i');
+
+function isSportChannelName(name) {
+  return SPORT_CHANNEL_RE.test(normaliseChannelName(name));
 }
 
 function deduplicateChannels(channels) {
@@ -534,9 +545,6 @@ async function fillSecondaryEPG(channels, emptyIds) {
   });
   cache = updatedCache;
   console.log(`Secondary EPG: filled ${filled} channels`);
-  // Debug: log what fox sports 502 resolved to
-  const fox502 = cache.find(ch => normaliseChannelName(ch.name).includes('fox sports 502') || normaliseChannelName(ch.name).includes('fox league'));
-  if (fox502) console.log(`Fox 502 check: ${fox502.name} — now: ${fox502.now?.title || 'none'}, next: ${fox502.next?.length || 0}`);
 }
 
 async function refreshFixtures() {
@@ -554,7 +562,7 @@ async function refresh() {
     console.log('Fetching fixtures first...');
     await fetchESPNFixtures(true); // full: refresh dated upcoming queries too
     console.log('Fetching EPG...');
-    const epgText = await axios.get(EPG_URL, { timeout: 120000, responseType: 'text' }).then(r => r.data);
+    let epgText = await axios.get(EPG_URL, { timeout: 120000, responseType: 'text' }).then(r => r.data);
 
     console.log('Parsing EPG XML...');
     const now = new Date();
@@ -564,6 +572,7 @@ async function refresh() {
     // Fast regex-based parser — avoids building a DOM, far lower memory usage
     const channels = [];
     const progsByChannel = {};
+    const sportChannelIds = new Set(); // ids of dedicated sport channels (by name)
 
     const chRe = /<channel\s[^>]*id="([^"]+)"[^>]*>([\s\S]*?)<\/channel>/g;
     let m;
@@ -572,9 +581,20 @@ async function refresh() {
       const nm = blk.match(/<display-name[^>]*>([^<]+)<\/display-name>/);
       const lg = blk.match(/<icon\s[^>]*src="([^"]+)"/);
       const la = blk.match(/<display-name[^>]*\slang="([^"]*)"/);
-      if (nm) channels.push({ id, name: nm[1].trim(), logo: lg ? lg[1] : '', lang: la ? la[1] : '' });
+      if (nm) {
+        const name = nm[1].trim();
+        channels.push({ id, name, logo: lg ? lg[1] : '', lang: la ? la[1] : '' });
+        if (isSportChannelName(name)) sportChannelIds.add(id);
+      }
     }
 
+    // Live-sport app: retain only sport-relevant programmes so we never hold the
+    // ~200k irrelevant ones. A programme is kept if it's on a dedicated sport channel,
+    // keyword-classifies as sport, or (looks like a fixture AND matches a real ESPN
+    // fixture). The ESPN check only runs on the small subset with a "v"/"vs" title,
+    // so it's cheap — and it stops movies like "Alien vs Predator" dragging channels in.
+    const fixturePattern = /\bv(?:s|ersus)?\.?\b/i;
+    let scanned = 0;
     const pRe = /<programme\b([^>]+)>([\s\S]*?)<\/programme>/g;
     while ((m = pRe.exec(epgText)) !== null) {
       const attrs = m[1], body = m[2];
@@ -586,16 +606,31 @@ async function refresh() {
       if (!start || !stop || stop < now || start > cutoff) continue;
       const tm = body.match(/<title[^>]*>([^<]+)<\/title>/);
       if (!tm) continue;
+      const title = tm[1].trim();
+      scanned++;
+      const keep = sportChannelIds.has(chId)
+        || keywordSport(title)
+        || (fixturePattern.test(title) && matchFixtureStrict(title));
+      if (!keep) continue;
       const dm = body.match(/<desc[^>]*>([\s\S]*?)<\/desc>/);
       if (!progsByChannel[chId]) progsByChannel[chId] = [];
-      progsByChannel[chId].push({ channel: chId, start, stop, startRaw, title: tm[1].trim(), desc: dm ? dm[1].trim().slice(0, 150) : '' });
+      progsByChannel[chId].push({ channel: chId, start, stop, startRaw, title, desc: dm ? dm[1].trim().slice(0, 150) : '' });
     }
-    console.log(`Parsed ${channels.length} channels, ${Object.values(progsByChannel).reduce((a,v)=>a+v.length,0)} programmes (48h window)`);
 
-    const raw = channels.map(ch => buildChannelData(ch, progsByChannel[ch.id] || [], now));
+    epgText = null; // release the full provider EPG string (~50-100MB) for GC
 
-    // Free large objects before secondary EPG starts
-    const channelsCopy = channels.map(ch => ({ id: ch.id, name: ch.name, lang: ch.lang, logo: ch.logo, quality: ch.quality }));
+    // Candidate set: dedicated sport channels + any channel with a retained programme.
+    const candidates = channels.filter(ch => sportChannelIds.has(ch.id) || (progsByChannel[ch.id] || []).length);
+    const built = candidates.map(ch => buildChannelData(ch, progsByChannel[ch.id] || [], now));
+
+    // Final cache: only channels that are actually showing/about-to-show sport, plus
+    // dedicated sport channels (kept even between events so they're present when a game
+    // starts — and so the secondary EPG can fill Fox 502/504 etc.).
+    const raw = built.filter(d => d.now?.sport || (d.upcoming && d.upcoming.length) || isSportChannelName(d.name));
+    console.log(`Parsed ${channels.length} channels / ${scanned} programmes → ${candidates.length} candidates → ${raw.length} sport channels in cache`);
+
+    // Only sport channels with no primary schedule need the secondary EPG (e.g. Fox 502/504).
+    const channelsCopy = raw.map(ch => ({ id: ch.id, name: ch.name, lang: ch.lang, logo: ch.logo }));
     const emptyIds = new Set(channelsCopy.filter(ch => !(progsByChannel[ch.id] || []).length).map(ch => ch.id));
 
     cache = deduplicateChannels(raw);
@@ -624,12 +659,6 @@ app.get('/fixtures', (req, res) => {
 app.get('/refresh', async (req, res) => {
   res.json({ message: 'Refresh started' });
   refresh();
-});
-app.get('/debug', (req, res) => {
-  if (!cache) return res.status(503).json({ error: 'not ready' });
-  const q = (req.query.q || 'sky sports golf').toLowerCase();
-  const ch = cache.find(c => c.name.toLowerCase().includes(q));
-  res.json(ch || { error: 'channel not found' });
 });
 
 app.get('/status', (req, res) => {

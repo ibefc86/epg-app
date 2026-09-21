@@ -5,14 +5,13 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node --max-old-space-size=768 server.js"
+    "start": "node --max-old-space-size=512 server.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@xmldom/xmldom": "^0.9.10",
     "axios": "^1.16.1",
     "express": "^5.2.1"
   }
