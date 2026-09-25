@@ -312,9 +312,24 @@ function stripAccents(s) {
   return s.normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
 
+// National-team nicknames → the country name ESPN uses, so "Socceroos v Brazil"
+// matches ESPN's "Brazil at Australia" (and marks it live). Unambiguous names only.
+const TEAM_NICKNAMES = [
+  [/\bsocceroos\b/g, 'australia'], [/\bmatildas\b/g, 'australia'],
+  [/\bwallabies\b/g, 'australia'], [/\ball blacks\b/g, 'new zealand'],
+  [/\bselecao\b/g, 'brazil'], [/\bazzurri\b/g, 'italy'],
+  [/\bla roja\b/g, 'spain'], [/\bles bleus\b/g, 'france'],
+  [/\bthree lions\b/g, 'england'], [/\boranje\b/g, 'netherlands'],
+];
+function normFixtureTitle(title) {
+  let t = stripAccents(title.toLowerCase().replace(/^[^:]+:\s*/, ''));
+  for (const [re, name] of TEAM_NICKNAMES) t = t.replace(re, name);
+  return t;
+}
+
 function matchFixtureStrict(title, progStart) {
   if (!title) return null;
-  const t = stripAccents(title.toLowerCase().replace(/^[^:]+:\s*/, ''));
+  const t = normFixtureTitle(title);
   for (const fix of fixtureCache) {
     // Skip if ESPN fixture time is more than 12h away from EPG programme time
     if (progStart && fix.espnStartTime) {
@@ -335,7 +350,7 @@ function matchFixtureStrict(title, progStart) {
 
 function matchFixture(title) {
   if (!title) return null;
-  const t = stripAccents(title.toLowerCase().replace(/^[^:]+:\s*/, ''));
+  const t = normFixtureTitle(title);
 
   for (const fix of fixtureCache) {
     if (fix.name && fix.name.length > 5 && t.includes(fix.name.slice(0, 20))) return fix;
