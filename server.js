@@ -106,7 +106,8 @@ const LEAGUE_TO_SPORT = {
 };
 
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
+  // The guide is public; the /api/watch routes are server-to-server only.
+  if (!req.path.startsWith('/api/')) res.header('Access-Control-Allow-Origin', '*');
   next();
 });
 // Only serve the front-end files. Serving the whole folder exposed server.js,
@@ -186,7 +187,10 @@ function deduplicateChannels(channels) {
     const best = pool[0];
     const words = normaliseChannelName(best.name).split(' ');
     const displayName = words.map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-    result.push({ ...best, quality: getQualityLabel(best.name), displayName, variants: group.length });
+    result.push({
+      ...best, quality: getQualityLabel(best.name), displayName, variants: group.length,
+      variantIds: group.map(ch => ({ id: ch.id, quality: getQualityLabel(ch.name) })),
+    });
   }
   return result;
 }
@@ -261,6 +265,7 @@ async function fetchESPNFixtures(full = false) {
 
       fixtures.push({
         sportId,
+        league: (league.url.split('/sports/')[1] || '').replace(/\/scoreboard.*$/, ''),
         emoji: league.emoji,
         name: (event.name || '').toLowerCase(),
         shortName: (event.shortName || '').toLowerCase(),
@@ -776,6 +781,144 @@ app.get('/refresh', (req, res) => {
   refresh();
 });
 
+// ---------------------------------------------------------------------------
+// Watch API — private, server-to-server, for the Just the Tip picks app.
+// Finds the channels showing a given fixture and hands out a stream URL on request.
+// Every route needs the X-Watch-Key header to equal WATCH_API_KEY; the IPTV login
+// (taken from EPG_URL — same Xtream panel) never leaves this server except inside the
+// stream URL returned to an authorised caller.
+// ---------------------------------------------------------------------------
+const crypto = require('crypto');
+const WATCH_API_KEY = process.env.WATCH_API_KEY || '';
+const STREAMS_REFRESH_MS = 6 * 60 * 60 * 1000;
+let streamsByEpgId = new Map(); // XMLTV channel id -> [{ id, name }]
+let streamIds = new Set();
+let streamsLoadedAt = 0;
+
+function xtream() {
+  if (!EPG_URL) return null;
+  try {
+    const u = new URL(EPG_URL);
+    const username = u.searchParams.get('username'), password = u.searchParams.get('password');
+    if (!username || !password) return null;
+    return { base: `${u.protocol}//${u.host}`, username, password };
+  } catch { return null; }
+}
+
+async function loadStreams() {
+  const x = xtream();
+  if (!x) return;
+  try {
+    const res = await axios.get(`${x.base}/player_api.php`, {
+      params: { username: x.username, password: x.password, action: 'get_live_streams' }, timeout: 60000,
+    });
+    const map = new Map(), ids = new Set();
+    for (const s of Array.isArray(res.data) ? res.data : []) {
+      if (!s.stream_id) continue;
+      ids.add(String(s.stream_id));
+      if (!s.epg_channel_id) continue;
+      const list = map.get(s.epg_channel_id) || [];
+      list.push({ id: String(s.stream_id), name: s.name || '' });
+      map.set(s.epg_channel_id, list);
+    }
+    if (ids.size) { streamsByEpgId = map; streamIds = ids; streamsLoadedAt = Date.now(); }
+    console.log(`Watch: loaded ${ids.size} live streams (${map.size} guide channels linked)`);
+  } catch (e) {
+    console.error('Watch: stream list failed:', (e.message || '').replace(/(username|password)=[^&\s]+/g, '$1=<redacted>'));
+  }
+}
+
+function requireWatchKey(req, res, next) {
+  res.set('Cache-Control', 'no-store');
+  if (!WATCH_API_KEY) return res.status(503).json({ error: 'Watch API not configured' });
+  const given = Buffer.from(String(req.get('X-Watch-Key') || ''));
+  const want = Buffer.from(WATCH_API_KEY);
+  if (given.length !== want.length || !crypto.timingSafeEqual(given, want)) return res.status(401).json({ error: 'Unauthorised' });
+  next();
+}
+
+// Does this fixture involve the given team name? Reuses the guide's fuzzy team matching
+// (accents, nicknames, distinctive words) in both directions against "Home v Away".
+function fixtureHasTeam(fix, name) {
+  if (!name) return true;
+  const { padded } = titleWords(`${fix.home} v ${fix.away} ${fix.homeShort} ${fix.awayShort}`);
+  if (teamMentioned(padded, name.toLowerCase())) return true;
+  const { padded: q } = titleWords(name);
+  return teamMentioned(q, fix.home) || teamMentioned(q, fix.away);
+}
+
+function findWatchFixture({ league, home, away, start }) {
+  const t = start ? new Date(start).getTime() : NaN;
+  const names = [home, away].filter(Boolean);
+  if (!names.length) return null;
+  const hits = fixtureCache.filter(f => {
+    if (league && f.league && f.league !== league) return false;
+    if (!league && names.length < 2) return false; // one team and no league is too loose
+    if (!isNaN(t) && f.espnStartTime && Math.abs(new Date(f.espnStartTime).getTime() - t) > 3 * 60 * 60 * 1000) return false;
+    return names.every(n => fixtureHasTeam(f, n));
+  });
+  hits.sort((a, b) => (b.isLive - a.isLive)
+    || Math.abs(new Date(a.espnStartTime || 0) - t) - Math.abs(new Date(b.espnStartTime || 0) - t));
+  return hits[0] || null;
+}
+
+// Australian channels first, then English-language (US/UK or no country prefix), then the rest.
+function regionRank(name) {
+  const m = String(name).match(/^\s*([A-Z]{2,3})\s*[:|]/i);
+  if (!m) return 1;
+  const cc = m[1].toUpperCase();
+  if (cc === 'AU' || cc === 'AUS') return 0;
+  if (['US', 'USA', 'UK', 'GB', 'CA', 'NZ', 'IE'].includes(cc)) return 1;
+  return 2;
+}
+
+function watchStatus(fix) {
+  if (fix.isLive) return 'live';
+  if (fix.isFinished) return 'finished';
+  const mins = fix.espnStartTime ? (new Date(fix.espnStartTime) - Date.now()) / 60000 : Infinity;
+  return mins <= 30 ? 'soon' : 'scheduled';
+}
+
+app.get('/api/watch/match', requireWatchKey, (req, res) => {
+  const q = { league: String(req.query.league || ''), home: String(req.query.home || ''), away: String(req.query.away || ''), start: req.query.start };
+  if (!cache) return res.status(503).json({ error: 'Guide still loading' });
+  const fix = findWatchFixture(q);
+  if (!fix) return res.json({ fixture: null, status: null, channels: [], reason: 'no_fixture' });
+
+  const channels = [];
+  const seen = new Set(); // a stream offered once, even if several guide channels point at it
+  let withoutStreams = 0;
+  for (const ch of cache) {
+    const live = ch.now?.sport?.fixtureKey === fix.fixtureKey;
+    const up = (ch.upcoming || []).find(p => p.fixtureKey === fix.fixtureKey);
+    if (!live && !up) continue;
+    const variants = ch.variantIds || [{ id: ch.id, quality: ch.quality }];
+    const streams = variants.flatMap(v => (streamsByEpgId.get(v.id) || []).map(s => ({ ...s, quality: v.quality })))
+      .filter(s => !seen.has(s.id) && seen.add(s.id));
+    if (!streams.length) { withoutStreams++; continue; }
+    channels.push({
+      name: ch.name, logo: ch.logo || '', onNow: live,
+      programme: live ? ch.now.title : up.title, streams,
+    });
+  }
+  channels.sort((a, b) => b.onNow - a.onNow || regionRank(a.name) - regionRank(b.name) || a.name.localeCompare(b.name));
+  res.json({
+    fixture: { name: fix.displayName, league: fix.league, start: fix.espnStartTime, isLive: fix.isLive, isFinished: fix.isFinished },
+    status: watchStatus(fix),
+    channels,
+    reason: channels.length ? null : (withoutStreams ? 'no_stream' : 'no_channel'),
+  });
+});
+
+app.get('/api/watch/stream/:id', requireWatchKey, (req, res) => {
+  const id = String(req.params.id);
+  if (!/^\d+$/.test(id) || !streamIds.has(id)) return res.status(404).json({ error: 'Unknown stream' });
+  const x = xtream();
+  if (!x) return res.status(503).json({ error: 'IPTV login not configured' });
+  const format = req.query.format === 'm3u8' ? 'm3u8' : 'ts';
+  res.json({ url: `${x.base}/live/${encodeURIComponent(x.username)}/${encodeURIComponent(x.password)}/${id}.${format}`, format });
+});
+
 const minutesSince = t => t ? Math.round((Date.now() - t) / 60000) : null;
 
 app.get('/status', (req, res) => {
@@ -788,6 +931,8 @@ app.get('/status', (req, res) => {
     guideAgeMinutes: minutesSince(lastRefreshOk),
     uptimeMinutes: Math.round(process.uptime() / 60),
     rssMB: Math.round(process.memoryUsage().rss / 1048576),
+    watchStreams: streamIds.size,
+    watchStreamsAgeMinutes: minutesSince(streamsLoadedAt),
   });
 });
 
@@ -803,4 +948,6 @@ app.listen(PORT, () => {
   console.log('EPG server running on port ' + PORT);
   refresh();
   setTimeout(refreshFixtures, 60 * 1000);
+  loadStreams();
+  setInterval(loadStreams, STREAMS_REFRESH_MS);
 });
