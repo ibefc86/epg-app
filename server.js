@@ -898,8 +898,17 @@ app.get('/api/watch/match', requireWatchKey, (req, res) => {
   const channels = [];
   const seen = new Set(); // a stream offered once, even if several guide channels point at it
   let withoutStreams = 0;
+  // A channel's "now" link to a fixture is only set if the game was already live when
+  // the guide was last rebuilt (every 30 min) — so also check the current programme's
+  // title against this fixture right now. Cheap word check first, full match second.
+  const showingNow = (ch) => {
+    if (!ch.now?.title) return false;
+    const { padded } = titleWords(ch.now.title);
+    if (!teamMentioned(padded, fix.home || fix.name) && !teamMentioned(padded, fix.away || '')) return false;
+    return matchFixture(ch.now.title, parseDate(ch.now.startRaw))?.fixtureKey === fix.fixtureKey;
+  };
   for (const ch of cache) {
-    const live = ch.now?.sport?.fixtureKey === fix.fixtureKey;
+    const live = ch.now?.sport?.fixtureKey === fix.fixtureKey || showingNow(ch);
     const up = (ch.upcoming || []).find(p => p.fixtureKey === fix.fixtureKey);
     if (!live && !up) continue;
     const variants = ch.variantIds || [{ id: ch.id, quality: ch.quality }];
