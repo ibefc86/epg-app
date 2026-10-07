@@ -5,14 +5,20 @@ const zlib = require('zlib');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Crash guards — log and keep running instead of letting the process exit.
-// A single malformed upstream response or network blip must not take the app offline.
+// Crash handling. An uncaught exception leaves the process in an unknown state, so log
+// it and exit — Railway's restart policy brings up a clean process. (Previously we kept
+// running, which can leave a "zombie" that answers nothing.) Rejected promises are only
+// logged: every network call already has its own error handling.
 process.on('uncaughtException', (err) => {
-  console.error('[uncaughtException]', err && err.stack ? err.stack : err);
+  console.error('[FATAL uncaughtException] exiting so Railway restarts us:', err && err.stack ? err.stack : err);
+  process.exit(1);
 });
 process.on('unhandledRejection', (reason) => {
   console.error('[unhandledRejection]', reason && reason.stack ? reason.stack : reason);
 });
+// Log why we're going down, so the next outage leaves evidence in the Railway logs.
+process.on('SIGTERM', () => { console.error('[SIGTERM] Railway asked the container to stop'); process.exit(0); });
+process.on('exit', (code) => { console.error(`[exit] process exiting with code ${code}`); });
 
 // Lightweight memory logging at refresh boundaries (heap should stay ~100MB).
 function logMem(tag) {
@@ -103,7 +109,11 @@ app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   next();
 });
-app.use(express.static(path.join(__dirname)));
+// Only serve the front-end files. Serving the whole folder exposed server.js,
+// package.json etc. to anyone who asked for them.
+const PUBLIC_FILES = new Set(['/', '/index.html', '/manifest.json', '/icon-180.png', '/icon-512.png']);
+const serveStatic = express.static(path.join(__dirname));
+app.use((req, res, next) => PUBLIC_FILES.has(req.path) ? serveStatic(req, res, next) : next());
 
 let cache = null;
 let fixtureCache = [];
@@ -312,6 +322,19 @@ function stripAccents(s) {
   return s.normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
 
+// Words that appear in lots of team names and so can't identify a team on their own
+// (otherwise "Newcastle United v Man City" matches "Leeds United v Manchester City").
+const GENERIC_TEAM_WORDS = new Set([
+  'united','city','town','county','real','club','athletic','athletico','sporting','rovers',
+  'wanderers','albion','state','north','south','east','west','saint','team','national',
+  'football','soccer','rugby','women','under',
+]);
+
+// Distinctive words (4+ letters, not generic) from an ESPN team name
+function teamWords(name) {
+  return stripAccents(name || '').split(/[^a-z0-9]+/).filter(w => w.length >= 4 && !GENERIC_TEAM_WORDS.has(w));
+}
+
 // National-team nicknames → the country name ESPN uses, so "Socceroos v Brazil"
 // matches ESPN's "Brazil at Australia" (and marks it live). Unambiguous names only.
 const TEAM_NICKNAMES = [
@@ -327,34 +350,55 @@ function normFixtureTitle(title) {
   return t;
 }
 
+// Title as " word word word " so we can test whole words ("roma" must not match "romania")
+function titleWords(title) {
+  const t = normFixtureTitle(title);
+  return { t, padded: ' ' + t.replace(/[^a-z0-9]+/g, ' ') + ' ' };
+}
+const hasWord = (padded, w) => padded.includes(' ' + w + ' ');
+
+// Does the title mention this team? Uses a distinctive word ("roosters"), or, when a name
+// has none ("Man City"), the whole name as a phrase.
+function teamMentioned(padded, name) {
+  const words = teamWords(name);
+  if (words.length) return words.some(w => hasWord(padded, w));
+  const phrase = stripAccents(name || '').replace(/[^a-z0-9]+/g, ' ').trim();
+  return phrase.length >= 4 && hasWord(padded, phrase);
+}
+
+function teamsMatch(padded, homeName, awayName) {
+  return teamMentioned(padded, homeName) && teamMentioned(padded, awayName);
+}
+
+// Ignore fixtures more than 12h from the programme's start (stops replays of last
+// night's game, or next week's fixture between the same teams, from matching).
+// Only for team-v-team games: golf/F1 events span days, so their start time is no guide.
+function tooFarApart(fix, progStart) {
+  if (!fix.home || !fix.away) return false;
+  return progStart && fix.espnStartTime && Math.abs(new Date(fix.espnStartTime) - progStart) > 12 * 60 * 60 * 1000;
+}
+
 function matchFixtureStrict(title, progStart) {
   if (!title) return null;
-  const t = normFixtureTitle(title);
+  const { t, padded } = titleWords(title);
   for (const fix of fixtureCache) {
-    // Skip if ESPN fixture time is more than 12h away from EPG programme time
-    if (progStart && fix.espnStartTime) {
-      const diff = Math.abs(new Date(fix.espnStartTime) - progStart);
-      if (diff > 12 * 60 * 60 * 1000) continue;
-    }
+    if (tooFarApart(fix, progStart)) continue;
     if (fix.name && fix.name.length > 5 && t.includes(fix.name.slice(0, 20))) return fix;
-    if (fix.home && fix.away) {
-      const homeWords = fix.home.split(' ').filter(w => w.length >= 4);
-      const awayWords = fix.away.split(' ').filter(w => w.length >= 4);
-      if (homeWords.length >= 1 && awayWords.length >= 1) {
-        if (homeWords.some(w => t.includes(w)) && awayWords.some(w => t.includes(w))) return fix;
-      }
-    }
+    if (fix.home && fix.away && teamsMatch(padded, fix.home, fix.away)) return fix;
   }
   return null;
 }
 
-function matchFixture(title) {
+function matchFixture(title, progStart) {
   if (!title) return null;
-  const t = normFixtureTitle(title);
+  const { t, padded } = titleWords(title);
 
   for (const fix of fixtureCache) {
+    if (tooFarApart(fix, progStart)) continue;
     if (fix.name && fix.name.length > 5 && t.includes(fix.name.slice(0, 20))) return fix;
-    if (fix.name && fix.name.length > 5) {
+    // Loose word matching on the event name — only for events without two teams
+    // (golf, F1, UFC cards). Team games use the stricter team-name check below.
+    if (fix.name && fix.name.length > 5 && !(fix.home && fix.away)) {
       const fixWords = fix.name.split(' ').filter(w => w.length >= 4);
       const matches = fixWords.filter(w => t.includes(w));
       if (fixWords.length >= 2 && matches.length >= 2) return fix;
@@ -364,21 +408,8 @@ function matchFixture(title) {
       if (tWords.length >= 1 && tWords.every(w => fix.name.includes(w))) return fix;
     }
 
-    if (fix.home && fix.away) {
-      const homeWords = fix.home.split(' ').filter(w => w.length >= 4);
-      const awayWords = fix.away.split(' ').filter(w => w.length >= 4);
-      if (homeWords.length && awayWords.length) {
-        if (homeWords.some(w => t.includes(w)) && awayWords.some(w => t.includes(w))) return fix;
-      }
-    }
-
-    if (fix.homeShort && fix.awayShort) {
-      const homeWords = fix.homeShort.split(' ').filter(w => w.length >= 4);
-      const awayWords = fix.awayShort.split(' ').filter(w => w.length >= 4);
-      if (homeWords.length && awayWords.length) {
-        if (homeWords.some(w => t.includes(w)) && awayWords.some(w => t.includes(w))) return fix;
-      }
-    }
+    if (fix.home && fix.away && teamsMatch(padded, fix.home, fix.away)) return fix;
+    if (fix.homeShort && fix.awayShort && teamsMatch(padded, fix.homeShort, fix.awayShort)) return fix;
   }
   return null;
 }
@@ -401,13 +432,18 @@ const SPORT_KEYWORDS = {
   mlb:         ['mlb','baseball','world series'],
 };
 
+// Whole-word matching, so "masters" doesn't catch "MasterChef" and "afl" doesn't
+// match inside another word.
+const escapeRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const SPORT_KEYWORD_RES = Object.entries(SPORT_KEYWORDS).map(([id, kws]) =>
+  [id, new RegExp('\\b(?:' + kws.map(escapeRe).join('|') + ')\\b', 'i')]);
+const SPORT_EMOJI = { cricket:'🏏', rugby_union:'🏆', golf:'⛳', cycling:'🚴', racing:'🏁', olympic:'🏅', tennis:'🎾', boxing:'🥊', nrl:'🏉', afl:'🦘', soccer:'⚽', nba:'🏀', nfl:'🏈', nhl:'🏒', mlb:'⚾' };
+
 function keywordSport(title) {
   if (!title) return null;
-  const t = title.toLowerCase();
-  for (const [id, kws] of Object.entries(SPORT_KEYWORDS)) {
-    if (kws.some(k => t.includes(k))) {
-      const EMOJI = { cricket:'🏏', rugby_union:'🏆', golf:'⛳', cycling:'🚴', racing:'🏁', olympic:'🏅', tennis:'🎾', boxing:'🥊', nrl:'🏉', afl:'🦘', soccer:'⚽', nba:'🏀', nfl:'🏈', nhl:'🏒', mlb:'⚾' };
-      return { sportId: id, emoji: EMOJI[id] || '🏟️', isLive: false, fixtureKey: null, displayName: null };
+  for (const [id, re] of SPORT_KEYWORD_RES) {
+    if (re.test(title)) {
+      return { sportId: id, emoji: SPORT_EMOJI[id] || '🏟️', isLive: false, fixtureKey: null, displayName: null };
     }
   }
   // Detect superscript live characters used by EPG providers
@@ -417,9 +453,9 @@ function keywordSport(title) {
   return null;
 }
 
-function classifyProgramme(title) {
+function classifyProgramme(title, progStart) {
   if (!title || isNonLive(title)) return null;
-  const fix = matchFixture(title);
+  const fix = matchFixture(title, progStart);
   if (fix) return {
     sportId: fix.sportId,
     emoji: fix.emoji,
@@ -443,7 +479,7 @@ function buildChannelData(ch, progs, now) {
   const in24h = new Date(now.getTime() + 24*60*60*1000);
   const next = sorted.filter(p => p.start > now && p.start < in24h).slice(0, 2);
   const upcoming = sorted.filter(p => p.start > now && p.start < in24h);
-  const classified = nowP ? classifyProgramme(nowP.title) : null;
+  const classified = nowP ? classifyProgramme(nowP.title, nowP.start) : null;
   return {
     ...ch,
     now: nowP ? {
@@ -463,78 +499,130 @@ function buildChannelData(ch, progs, now) {
   };
 }
 
-// Fast regex-based XMLTV parser — avoids building a DOM tree, much lower memory usage
-function parseXmltvFast(text) {
-  const idToName = {}, idToLcn = {};
-  const byName = {}, byLcn = {};
+// ---------------------------------------------------------------------------
+// Streaming XMLTV parsing
+// The provider EPG is 50-100MB. Downloading it into one big string and running regexes
+// over it is what made memory jump by hundreds of MB on every refresh. Instead we parse
+// <channel> and <programme> elements as the download arrives, only ever holding the
+// small unfinished tail of the stream in memory.
+// ---------------------------------------------------------------------------
+const { StringDecoder } = require('string_decoder');
+const ELEMENT_RE = /<channel\s([^>]*)>([\s\S]*?)<\/channel>|<programme\b([^>]+)>([\s\S]*?)<\/programme>/g;
+const MAX_TAIL = 4 * 1024 * 1024; // a single element is never anywhere near this big
 
-  // Extract channels
-  const chRe = /<channel\s[^>]*id="([^"]+)"[^>]*>([\s\S]*?)<\/channel>/g;
-  let m;
-  while ((m = chRe.exec(text)) !== null) {
-    const id = m[1], block = m[2];
-    const nm = block.match(/<display-name[^>]*>([^<]+)<\/display-name>/);
-    const lc = block.match(/<lcn[^>]*>(\d+)<\/lcn>/);
-    if (nm) { idToName[id] = normaliseChannelName(nm[1]); if (lc) idToLcn[id] = lc[1]; }
-  }
-
-  // Extract programmes — order-independent attribute matching
-  const pRe = /<programme\b([^>]+)>([\s\S]*?)<\/programme>/g;
-  while ((m = pRe.exec(text)) !== null) {
-    const attrs = m[1], body = m[2];
-    const chId = (attrs.match(/\bchannel="([^"]+)"/) || [])[1];
-    const startRaw = (attrs.match(/\bstart="([^"]+)"/) || [])[1];
-    const stopRaw = (attrs.match(/\bstop="([^"]+)"/) || [])[1];
-    if (!chId || !startRaw || !stopRaw) continue;
-    const name = idToName[chId];
-    if (!name) continue;
-    const tm = body.match(/<title[^>]*>([^<]+)<\/title>/);
-    if (!tm) continue;
-    const title = tm[1].trim();
-    if (!title || /^no listing|^no data|^tba$|^tbd$/i.test(title)) continue;
-    const start = parseDate(startRaw), stop = parseDate(stopRaw);
-    if (!start || !stop) continue;
-    const dm = body.match(/<desc[^>]*>([^<]+)<\/desc>/);
-    const prog = { start, stop, startRaw, title, desc: dm ? dm[1].trim().slice(0, 150) : '' };
-    if (!byName[name]) byName[name] = [];
-    byName[name].push(prog);
-    const lcn = idToLcn[chId];
-    if (lcn) { if (!byLcn[lcn]) byLcn[lcn] = []; byLcn[lcn].push(prog); }
-  }
-
-  return { byName, byLcn, channelCount: Object.keys(idToName).length };
+function parseXmltvStream(readable, { onChannel, onProgramme }) {
+  return new Promise((resolve, reject) => {
+    const decoder = new StringDecoder('utf8');
+    let buf = '';
+    let first = true;
+    const handle = (str) => {
+      buf += str;
+      if (first && buf.length) { buf = buf.replace(/^﻿/, ''); first = false; }
+      ELEMENT_RE.lastIndex = 0;
+      let m, last = 0;
+      while ((m = ELEMENT_RE.exec(buf)) !== null) {
+        if (m[1] !== undefined) onChannel(m[1], m[2]);
+        else onProgramme(m[3], m[4]);
+        last = ELEMENT_RE.lastIndex;
+      }
+      buf = buf.slice(last);
+      if (buf.length > MAX_TAIL) {
+        console.warn('XMLTV parser: skipping an oversized unparseable chunk');
+        buf = buf.slice(-64 * 1024);
+      }
+    };
+    readable.on('data', c => { try { handle(typeof c === 'string' ? c : decoder.write(c)); } catch (e) { readable.destroy(e); } });
+    readable.on('end', () => { try { handle(decoder.end()); resolve(); } catch (e) { reject(e); } });
+    readable.on('error', reject);
+  });
 }
 
-async function fillSecondaryEPG(channels, emptyIds) {
-  const emptyChannels = channels.filter(ch => emptyIds.has(ch.id));
-  if (!emptyChannels.length) return;
-  console.log(`Secondary EPG: filling ${emptyChannels.length} empty channels...`);
+// Download an XMLTV feed and parse it as it streams in. timeoutMs caps the whole download.
+async function streamXmltvFromUrl(url, { gzip = false, timeoutMs = 180000 } = {}, handlers) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await axios.get(url, { responseType: 'stream', signal: ctrl.signal, timeout: 60000 });
+    const body = res.data;
+    ctrl.signal.addEventListener('abort', () => body.destroy(new Error(`download took longer than ${timeoutMs / 1000}s`)));
+    let stream = body;
+    if (gzip) {
+      stream = body.pipe(zlib.createGunzip());
+      body.on('error', e => stream.destroy(e));
+    }
+    await parseXmltvStream(stream, handlers);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
-  const secondaryByName = {};
-  const secondaryByLcn = {};
+const attr = (attrs, name) => (attrs.match(new RegExp('\\b' + name + '="([^"]+)"')) || [])[1];
+
+// ---------------------------------------------------------------------------
+// Secondary EPG (fills Foxtel sport channels the provider has no data for).
+// These schedules barely change, so download them every few hours, not every refresh.
+// ---------------------------------------------------------------------------
+const SECONDARY_REFRESH_MS = 3 * 60 * 60 * 1000;
+let secondaryCache = null;     // { byName, byLcn }
+let secondaryFetchedAt = 0;
+
+async function loadSecondaryEPG() {
+  const byName = {}, byLcn = {};
+  const now = new Date();
+  const cutoff = new Date(now.getTime() + 26 * 60 * 60 * 1000);
 
   for (const { url, gzip } of EPG_SECONDARY_URLS) {
+    const idToName = {}, idToLcn = {};
+    const srcByName = {}, srcByLcn = {};
+    let progCount = 0;
     try {
-      const raw = await axios.get(url, { timeout: 45000, responseType: 'arraybuffer' });
-      let text = gzip
-        ? await new Promise((res, rej) => zlib.gunzip(raw.data, (e, d) => e ? rej(e) : res(d.toString('utf8'))))
-        : raw.data.toString('utf8');
-      text = text.replace(/^﻿/, '').trimStart();
-
-      const { byName, byLcn, channelCount } = parseXmltvFast(text);
-      // Merge into combined maps
-      for (const [k, v] of Object.entries(byName)) {
-        if (!secondaryByName[k]) secondaryByName[k] = v;
-      }
-      for (const [k, v] of Object.entries(byLcn)) {
-        if (!secondaryByLcn[k]) secondaryByLcn[k] = v;
-      }
-      const progCount = Object.values(byName).reduce((a,v) => a+v.length, 0);
-      console.log(`Secondary EPG loaded: ${url.split('/').pop()} — ${channelCount} channels, ${progCount} programmes`);
-    } catch(e) {
+      await streamXmltvFromUrl(url, { gzip, timeoutMs: 90000 }, {
+        onChannel(attrs, block) {
+          const id = attr(attrs, 'id');
+          const nm = block.match(/<display-name[^>]*>([^<]+)<\/display-name>/);
+          const lc = block.match(/<lcn[^>]*>(\d+)<\/lcn>/);
+          if (id && nm) { idToName[id] = normaliseChannelName(nm[1]); if (lc) idToLcn[id] = lc[1]; }
+        },
+        onProgramme(attrs, body) {
+          const chId = attr(attrs, 'channel'), startRaw = attr(attrs, 'start'), stopRaw = attr(attrs, 'stop');
+          if (!chId || !startRaw || !stopRaw) return;
+          const name = idToName[chId];
+          if (!name) return;
+          const start = parseDate(startRaw), stop = parseDate(stopRaw);
+          if (!start || !stop || stop < now || start > cutoff) return; // same 26h window as primary
+          const tm = body.match(/<title[^>]*>([^<]+)<\/title>/);
+          if (!tm) return;
+          const title = tm[1].trim();
+          if (!title || /^no listing|^no data|^tba$|^tbd$/i.test(title)) return;
+          const dm = body.match(/<desc[^>]*>([^<]+)<\/desc>/);
+          const prog = { start, stop, startRaw, title, desc: dm ? dm[1].trim().slice(0, 150) : '' };
+          (srcByName[name] ||= []).push(prog);
+          const lcn = idToLcn[chId];
+          if (lcn) (srcByLcn[lcn] ||= []).push(prog);
+          progCount++;
+        },
+      });
+      for (const [k, v] of Object.entries(srcByName)) if (!byName[k]) byName[k] = v;
+      for (const [k, v] of Object.entries(srcByLcn)) if (!byLcn[k]) byLcn[k] = v;
+      console.log(`Secondary EPG loaded: ${url.split('/').pop()} — ${Object.keys(idToName).length} channels, ${progCount} programmes in window`);
+    } catch (e) {
       console.error(`Secondary EPG failed (${url.split('/').pop()}):`, e.message);
     }
   }
+  return { byName, byLcn };
+}
+
+async function fillSecondaryEPG() {
+  const needFill = cache.filter(ch => !ch.now && !ch.next?.length);
+  if (!needFill.length) return;
+
+  if (!secondaryCache || Date.now() - secondaryFetchedAt > SECONDARY_REFRESH_MS) {
+    console.log('Secondary EPG: downloading...');
+    const fresh = await loadSecondaryEPG();
+    if (Object.keys(fresh.byName).length) { secondaryCache = fresh; secondaryFetchedAt = Date.now(); }
+  }
+  if (!secondaryCache) return;
+  const { byName: secondaryByName, byLcn: secondaryByLcn } = secondaryCache;
 
   const secondaryNames = Object.keys(secondaryByName);
   function findSecondaryProgs(normName) {
@@ -551,15 +639,14 @@ async function fillSecondaryEPG(channels, emptyIds) {
 
   const now = new Date();
   let filled = 0;
-  const updatedCache = cache.map(ch => {
+  cache = cache.map(ch => {
     if (ch.now || ch.next?.length) return ch;
     const secProgs = findSecondaryProgs(normaliseChannelName(ch.name));
     if (!secProgs?.length) return ch;
     filled++;
     return buildChannelData(ch, secProgs, now);
   });
-  cache = updatedCache;
-  console.log(`Secondary EPG: filled ${filled} channels`);
+  console.log(`Secondary EPG: filled ${filled} of ${needFill.length} empty channels`);
 }
 
 async function refreshFixtures() {
@@ -568,99 +655,107 @@ async function refreshFixtures() {
   } catch(e) {
     console.error('Fixture refresh failed:', e.message);
   }
-  setTimeout(refreshFixtures, 3 * 60 * 1000); // every 3 min instead of 60s
+  setTimeout(refreshFixtures, 3 * 60 * 1000);
+}
+
+// ---------------------------------------------------------------------------
+// Main EPG refresh. Exactly ONE refresh loop ever runs: a refresh already in progress
+// is never started twice, and there is only ever one pending timer. (Previously every
+// hit on /refresh started an extra loop that ran forever alongside the original.)
+// ---------------------------------------------------------------------------
+let refreshing = false;
+let refreshTimer = null;
+let lastRefreshStarted = 0;
+let lastRefreshOk = 0;
+
+function scheduleRefresh(ms) {
+  clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(refresh, ms);
 }
 
 async function refresh() {
+  if (refreshing) { console.log('Refresh already running — skipped'); return; }
+  refreshing = true;
+  lastRefreshStarted = Date.now();
+  let nextInMs = 30 * 60 * 1000;
   try {
+    if (!EPG_URL) throw new Error('EPG_URL environment variable is not set');
     logMem('refresh:start');
     console.log('Fetching fixtures first...');
     await fetchESPNFixtures(true); // full: refresh dated upcoming queries too
-    console.log('Fetching EPG...');
-    let epgText = await axios.get(EPG_URL, { timeout: 120000, responseType: 'text' }).then(r => r.data);
 
-    console.log('Parsing EPG XML...');
     const now = new Date();
-    // App only uses "now" + next 24h; keep a small buffer. Smaller window = far less memory.
+    // App only uses "now" + next 24h; keep a small buffer.
     const cutoff = new Date(now.getTime() + 26 * 60 * 60 * 1000);
-
-    // Fast regex-based parser — avoids building a DOM, far lower memory usage
     const channels = [];
     const progsByChannel = {};
     const sportChannelIds = new Set(); // ids of dedicated sport channels (by name)
+    // Only titles that look like "X v Y" are checked against ESPN fixtures — cheap, and it
+    // stops movies like "Alien vs Predator" dragging channels in.
+    const fixturePattern = /\bv(?:s|ersus)?\.?\b/i;
+    let scanned = 0;
 
-    const chRe = /<channel\s[^>]*id="([^"]+)"[^>]*>([\s\S]*?)<\/channel>/g;
-    let m;
-    while ((m = chRe.exec(epgText)) !== null) {
-      const id = m[1], blk = m[2];
-      const nm = blk.match(/<display-name[^>]*>([^<]+)<\/display-name>/);
-      const lg = blk.match(/<icon\s[^>]*src="([^"]+)"/);
-      const la = blk.match(/<display-name[^>]*\slang="([^"]*)"/);
-      if (nm) {
+    console.log('Fetching + parsing EPG (streaming)...');
+    await streamXmltvFromUrl(EPG_URL, { timeoutMs: 5 * 60 * 1000 }, {
+      onChannel(attrs, blk) {
+        const id = attr(attrs, 'id');
+        const nm = blk.match(/<display-name[^>]*>([^<]+)<\/display-name>/);
+        if (!id || !nm) return;
+        const lg = blk.match(/<icon\s[^>]*src="([^"]+)"/);
+        const la = blk.match(/<display-name[^>]*\slang="([^"]*)"/);
         const name = nm[1].trim();
         channels.push({ id, name, logo: lg ? lg[1] : '', lang: la ? la[1] : '' });
         if (isSportChannelName(name)) sportChannelIds.add(id);
-      }
-    }
-
-    // Live-sport app: retain only sport-relevant programmes so we never hold the
-    // ~200k irrelevant ones. A programme is kept if it's on a dedicated sport channel,
-    // keyword-classifies as sport, or (looks like a fixture AND matches a real ESPN
-    // fixture). The ESPN check only runs on the small subset with a "v"/"vs" title,
-    // so it's cheap — and it stops movies like "Alien vs Predator" dragging channels in.
-    const fixturePattern = /\bv(?:s|ersus)?\.?\b/i;
-    let scanned = 0;
-    const pRe = /<programme\b([^>]+)>([\s\S]*?)<\/programme>/g;
-    while ((m = pRe.exec(epgText)) !== null) {
-      const attrs = m[1], body = m[2];
-      const chId = (attrs.match(/\bchannel="([^"]+)"/) || [])[1];
-      const startRaw = (attrs.match(/\bstart="([^"]+)"/) || [])[1];
-      const stopRaw = (attrs.match(/\bstop="([^"]+)"/) || [])[1];
-      if (!chId || !startRaw || !stopRaw) continue;
-      const start = parseDate(startRaw), stop = parseDate(stopRaw);
-      if (!start || !stop || stop < now || start > cutoff) continue;
-      const tm = body.match(/<title[^>]*>([^<]+)<\/title>/);
-      if (!tm) continue;
-      const title = tm[1].trim();
-      scanned++;
-      const keep = sportChannelIds.has(chId)
-        || keywordSport(title)
-        || (fixturePattern.test(title) && matchFixtureStrict(title));
-      if (!keep) continue;
-      const dm = body.match(/<desc[^>]*>([\s\S]*?)<\/desc>/);
-      if (!progsByChannel[chId]) progsByChannel[chId] = [];
-      progsByChannel[chId].push({ channel: chId, start, stop, startRaw, title, desc: dm ? dm[1].trim().slice(0, 150) : '' });
-    }
-
-    epgText = null; // release the full provider EPG string (~50-100MB) for GC
+      },
+      onProgramme(attrs, body) {
+        const chId = attr(attrs, 'channel'), startRaw = attr(attrs, 'start'), stopRaw = attr(attrs, 'stop');
+        if (!chId || !startRaw || !stopRaw) return;
+        const start = parseDate(startRaw), stop = parseDate(stopRaw);
+        if (!start || !stop || stop < now || start > cutoff) return;
+        const tm = body.match(/<title[^>]*>([^<]+)<\/title>/);
+        if (!tm) return;
+        const title = tm[1].trim();
+        scanned++;
+        // Keep only sport-relevant programmes: on a dedicated sport channel, keyword-classified
+        // as sport, or a "v"/"vs" title that matches a real ESPN fixture.
+        const keep = sportChannelIds.has(chId)
+          || keywordSport(title)
+          || (fixturePattern.test(title) && matchFixtureStrict(title, start));
+        if (!keep) return;
+        const dm = body.match(/<desc[^>]*>([\s\S]*?)<\/desc>/);
+        (progsByChannel[chId] ||= []).push({ channel: chId, start, stop, startRaw, title, desc: dm ? dm[1].trim().slice(0, 150) : '' });
+      },
+    });
+    if (!channels.length) throw new Error('EPG download contained no channels (provider down or credentials rejected?)');
 
     // Candidate set: dedicated sport channels + any channel with a retained programme.
     const candidates = channels.filter(ch => sportChannelIds.has(ch.id) || (progsByChannel[ch.id] || []).length);
     const built = candidates.map(ch => buildChannelData(ch, progsByChannel[ch.id] || [], now));
 
-    // Final cache: only channels that are actually showing/about-to-show sport, plus
-    // dedicated sport channels (kept even between events so they're present when a game
-    // starts — and so the secondary EPG can fill Fox 502/504 etc.).
+    // Final cache: channels actually showing/about-to-show sport, plus dedicated sport
+    // channels (kept between events so they're present when a game starts, and so the
+    // secondary EPG can fill Fox 502/504 etc.).
     const raw = built.filter(d => d.now?.sport || (d.upcoming && d.upcoming.length) || isSportChannelName(d.name));
     console.log(`Parsed ${channels.length} channels / ${scanned} programmes → ${candidates.length} candidates → ${raw.length} sport channels in cache`);
 
-    // Only sport channels with no primary schedule need the secondary EPG (e.g. Fox 502/504).
-    const channelsCopy = raw.map(ch => ({ id: ch.id, name: ch.name, lang: ch.lang, logo: ch.logo }));
-    const emptyIds = new Set(channelsCopy.filter(ch => !(progsByChannel[ch.id] || []).length).map(ch => ch.id));
-
     cache = deduplicateChannels(raw);
+    lastRefreshOk = Date.now();
     console.log(`EPG ready — ${raw.length} → ${cache.length} channels`);
     logMem('refresh:done');
-    // Fill missing channels from secondary EPG in background (non-blocking)
-    fillSecondaryEPG(channelsCopy, emptyIds)
-      .then(() => logMem('secondary:done'))
-      .catch(e => console.error('Secondary EPG error:', e.message));
-  } catch(e) {
+
+    try {
+      await fillSecondaryEPG();
+      logMem('secondary:done');
+    } catch (e) {
+      console.error('Secondary EPG error:', e.message);
+    }
+  } catch (e) {
     console.error('Refresh failed:', e.message);
-    setTimeout(refresh, 2 * 60 * 1000);
-    return;
+    nextInMs = 2 * 60 * 1000; // retry soon; the last good guide keeps being served meanwhile
+  } finally {
+    refreshing = false;
+    scheduleRefresh(nextInMs);
   }
-  setTimeout(refresh, 30 * 60 * 1000);
 }
 
 app.get('/guide', (req, res) => {
@@ -671,18 +766,37 @@ app.get('/fixtures', (req, res) => {
   const upcoming = fixtureCache.filter(f => f.isUpcoming);
   res.json(upcoming);
 });
-app.get('/refresh', async (req, res) => {
+// Manual refresh. Public, so it's rate-limited and can never start a second loop.
+app.get('/refresh', (req, res) => {
+  if (refreshing) return res.json({ message: 'Refresh already running' });
+  if (Date.now() - lastRefreshStarted < 5 * 60 * 1000) {
+    return res.status(429).json({ message: 'Refreshed less than 5 minutes ago — try again shortly' });
+  }
   res.json({ message: 'Refresh started' });
   refresh();
 });
+
+const minutesSince = t => t ? Math.round((Date.now() - t) / 60000) : null;
 
 app.get('/status', (req, res) => {
   res.json({
     ready: !!cache,
     channels: cache ? cache.length : 0,
     fixtures: fixtureCache.length,
-    live: fixtureCache.filter(f => f.isLive).length
+    live: fixtureCache.filter(f => f.isLive).length,
+    refreshing,
+    guideAgeMinutes: minutesSince(lastRefreshOk),
+    uptimeMinutes: Math.round(process.uptime() / 60),
+    rssMB: Math.round(process.memoryUsage().rss / 1048576),
   });
+});
+
+// For the uptime monitor: 503 if the guide is stale (no successful refresh in 90 min),
+// so we get alerted when the app is up but stuck, not just when it's fully down.
+app.get('/health', (req, res) => {
+  const age = minutesSince(lastRefreshOk);
+  const ok = age !== null ? age < 90 : process.uptime() < 10 * 60; // allow 10 min to start up
+  res.status(ok ? 200 : 503).json({ ok, guideAgeMinutes: age, uptimeMinutes: Math.round(process.uptime() / 60) });
 });
 
 app.listen(PORT, () => {

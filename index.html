@@ -621,7 +621,9 @@ function filtered() {
   }
 }
 
+let firstLoad = true, lastLoad = 0;
 async function load() {
+  lastLoad = Date.now();
   try {
     const [guideRes, fixturesRes] = await Promise.all([
       fetch(SERVER+'/guide'),
@@ -638,12 +640,22 @@ async function load() {
     channels = await res.json();
     document.getElementById('subtitle').textContent = channels.length.toLocaleString()+' sport channels';
     document.getElementById('tabs').style.display='flex';
-    if (!favSports.length) setTimeout(openPicker, 500);
+    if (firstLoad && !favSports.length) setTimeout(openPicker, 500);
+    firstLoad = false;
     render();
   } catch(e) {
+    // On a background refresh, keep showing the guide we already have
+    if (channels.length) { document.getElementById('subtitle').textContent = 'Offline — showing last update'; return; }
     document.getElementById('channel-list').innerHTML=`<div class="error-msg"><strong>Could not load EPG</strong><br><br>Error: ${e.message}</div>`;
   }
 }
+
+// Keep the guide current: re-fetch every 3 min while open, and straight away when the
+// app is brought back to the front (otherwise "Live" badges go stale until a manual reload).
+setInterval(()=>{ if (document.visibilityState==='visible') load(); }, 3*60*1000);
+document.addEventListener('visibilitychange', ()=>{
+  if (document.visibilityState==='visible' && Date.now()-lastLoad > 60*1000) load();
+});
 
 setInterval(()=>{
   document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit',timeZone:'Australia/Sydney',hour12:true});
