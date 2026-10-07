@@ -58,6 +58,14 @@ const ESPN_LEAGUES = [
   { id: 'nfl',              name: 'NFL',                    url: `${ESPN_BASE}/football/nfl/scoreboard`,                  emoji: '🏈' },
   { id: 'nhl',              name: 'NHL',                    url: `${ESPN_BASE}/hockey/nhl/scoreboard`,                    emoji: '🏒' },
   { id: 'mlb',              name: 'MLB',                    url: `${ESPN_BASE}/baseball/mlb/scoreboard`,                  emoji: '⚾' },
+  // Leagues the Just the Tip tipsters bet that weren't followed yet ("Watch live" matching).
+  { id: 'ncaaf',            name: 'College Football',       url: `${ESPN_BASE}/football/college-football/scoreboard?groups=80`, emoji: '🏈' },
+  { id: 'wnba',             name: 'WNBA',                   url: `${ESPN_BASE}/basketball/wnba/scoreboard`,               emoji: '🏀' },
+  { id: 'soccer_eng2',      name: 'EFL Championship',       url: `${ESPN_BASE}/soccer/eng.2/scoreboard`,                  emoji: '⚽' },
+  { id: 'soccer_eng3',      name: 'EFL League One',         url: `${ESPN_BASE}/soccer/eng.3/scoreboard`,                  emoji: '⚽' },
+  { id: 'soccer_eng4',      name: 'EFL League Two',         url: `${ESPN_BASE}/soccer/eng.4/scoreboard`,                  emoji: '⚽' },
+  { id: 'soccer_jpn',       name: 'J1 League',              url: `${ESPN_BASE}/soccer/jpn.1/scoreboard`,                  emoji: '⚽' },
+  { id: 'soccer_ger2',      name: '2. Bundesliga',          url: `${ESPN_BASE}/soccer/ger.2/scoreboard`,                  emoji: '⚽' },
   { id: 'soccer_epl',       name: 'Premier League',         url: `${ESPN_BASE}/soccer/eng.1/scoreboard`,                  emoji: '⚽' },
   { id: 'soccer_ucl',       name: 'UEFA Champions League',  url: `${ESPN_BASE}/soccer/uefa.champions/scoreboard`,         emoji: '⚽' },
   { id: 'soccer_uel',       name: 'UEFA Europa League',     url: `${ESPN_BASE}/soccer/uefa.europa/scoreboard`,            emoji: '⚽' },
@@ -94,6 +102,8 @@ const LEAGUE_TO_SPORT = {
   nfl: 'nfl',
   nhl: 'ice_hockey',
   mlb: 'baseball',
+  ncaaf: 'nfl', wnba: 'nba',
+  soccer_eng2: 'soccer', soccer_eng3: 'soccer', soccer_eng4: 'soccer', soccer_jpn: 'soccer', soccer_ger2: 'soccer',
   soccer_epl: 'soccer', soccer_ucl: 'soccer', soccer_uel: 'soccer', soccer_uecl: 'soccer',
   soccer_mls: 'soccer', soccer_esp: 'soccer', soccer_ger: 'soccer', soccer_ita: 'soccer',
   soccer_aus: 'soccer', soccer_fra: 'soccer', soccer_facup: 'soccer', soccer_efl: 'soccer',
@@ -227,7 +237,7 @@ async function fetchESPNFixtures(full = false) {
   if (full || !datedFixturesRaw.length || Date.now() - lastDatedFetch > 15 * 60 * 1000) {
     const dates = [d(0), d(1), d(2)]; // today + next 2 days
     const datedReqs = ESPN_LEAGUES.flatMap(league =>
-      dates.map(date => ({ league, url: `${league.url}?dates=${date}` }))
+      dates.map(date => ({ league, url: `${league.url}${league.url.includes('?') ? '&' : '?'}dates=${date}` }))
     );
     const datedResults = await runBatched(datedReqs, ({ league, url }) =>
       axios.get(url, { timeout: 10000 })
