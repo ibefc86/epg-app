@@ -59,6 +59,8 @@ const ESPN_LEAGUES = [
   { id: 'nhl',              name: 'NHL',                    url: `${ESPN_BASE}/hockey/nhl/scoreboard`,                    emoji: '🏒' },
   { id: 'mlb',              name: 'MLB',                    url: `${ESPN_BASE}/baseball/mlb/scoreboard`,                  emoji: '⚾' },
   // Leagues the Just the Tip tipsters bet that weren't followed yet ("Watch live" matching).
+  { id: 'tennis_atp',       name: 'ATP',                    url: `${ESPN_BASE}/tennis/atp/scoreboard`,                    emoji: '🎾' },
+  { id: 'tennis_wta',       name: 'WTA',                    url: `${ESPN_BASE}/tennis/wta/scoreboard`,                    emoji: '🎾' },
   { id: 'ncaaf',            name: 'College Football',       url: `${ESPN_BASE}/football/college-football/scoreboard?groups=80`, emoji: '🏈' },
   { id: 'wnba',             name: 'WNBA',                   url: `${ESPN_BASE}/basketball/wnba/scoreboard`,               emoji: '🏀' },
   { id: 'soccer_eng2',      name: 'EFL Championship',       url: `${ESPN_BASE}/soccer/eng.2/scoreboard`,                  emoji: '⚽' },
@@ -102,7 +104,7 @@ const LEAGUE_TO_SPORT = {
   nfl: 'nfl',
   nhl: 'ice_hockey',
   mlb: 'baseball',
-  ncaaf: 'nfl', wnba: 'nba',
+  ncaaf: 'nfl', wnba: 'nba', tennis_atp: 'tennis', tennis_wta: 'tennis',
   soccer_eng2: 'soccer', soccer_eng3: 'soccer', soccer_eng4: 'soccer', soccer_jpn: 'soccer', soccer_ger2: 'soccer',
   soccer_epl: 'soccer', soccer_ucl: 'soccer', soccer_uel: 'soccer', soccer_uecl: 'soccer',
   soccer_mls: 'soccer', soccer_esp: 'soccer', soccer_ger: 'soccer', soccer_ita: 'soccer',
@@ -256,6 +258,36 @@ async function fetchESPNFixtures(full = false) {
     const { league, data } = result;
     const events = data?.events || [];
     const sportId = LEAGUE_TO_SPORT[league.id] || league.id;
+
+    if (sportId === 'tennis') {
+      const leagueSlug = (league.url.split('/sports/')[1] || '').replace(/\/scoreboard.*$/, '');
+      const recent = Date.now() - 24 * 60 * 60 * 1000, soon = Date.now() + 3 * 24 * 60 * 60 * 1000;
+      for (const event of events) {
+        for (const grouping of event.groupings || []) {
+          for (const comp of grouping.competitions || []) {
+            const names = (comp.competitors || []).map(c => (c.athlete || c.roster || {}).displayName || '');
+            if (names.length !== 2 || !names[0] || !names[1]) continue;
+            const t = comp.date ? new Date(comp.date).getTime() : NaN;
+            if (isNaN(t) || t < recent || t > soon) continue;
+            const state = comp.status?.type?.state;
+            const surname = n => n.split('/').map(x => x.trim().split(' ').slice(-1)[0]).join(' / ');
+            fixtures.push({
+              sportId, league: leagueSlug, emoji: league.emoji,
+              name: `${names[0]} v ${names[1]}`.toLowerCase(), shortName: '',
+              home: names[0].toLowerCase(), away: names[1].toLowerCase(),
+              homeShort: surname(names[0]).toLowerCase(), awayShort: surname(names[1]).toLowerCase(),
+              displayName: `${names[0]} v ${names[1]}`,
+              homeLogo: '', awayLogo: '', homeColor: null, awayColor: null,
+              espnDesc: [event.name, grouping.grouping?.displayName, comp.round?.displayName].filter(Boolean).join(' · '),
+              tournament: event.name || '', court: comp.venue?.court || '',
+              isLive: state === 'in', isUpcoming: state === 'pre', isFinished: state === 'post',
+              fixtureKey: `tennis__${comp.id}`, espnStartTime: comp.date,
+            });
+          }
+        }
+      }
+      continue;
+    }
 
     for (const event of events) {
       const state = event.status?.type?.state;
@@ -803,6 +835,7 @@ const WATCH_API_KEY = process.env.WATCH_API_KEY || '';
 const STREAMS_REFRESH_MS = 6 * 60 * 60 * 1000;
 let streamsByEpgId = new Map(); // XMLTV channel id -> [{ id, name }]
 let streamIds = new Set();
+let eventStreams = []; // one-off event feeds with a date in their name (no guide data)
 let streamsLoadedAt = 0;
 
 function xtream() {
@@ -822,16 +855,18 @@ async function loadStreams() {
     const res = await axios.get(`${x.base}/player_api.php`, {
       params: { username: x.username, password: x.password, action: 'get_live_streams' }, timeout: 60000,
     });
-    const map = new Map(), ids = new Set();
+    const map = new Map(), ids = new Set(), events = [];
     for (const s of Array.isArray(res.data) ? res.data : []) {
       if (!s.stream_id) continue;
       ids.add(String(s.stream_id));
+      const dm = String(s.name || '').match(/\((\d{4}-\d{2}-\d{2})[ T]\d{2}:\d{2}/);
+      if (dm) events.push({ id: String(s.stream_id), name: s.name, date: dm[1] });
       if (!s.epg_channel_id) continue;
       const list = map.get(s.epg_channel_id) || [];
       list.push({ id: String(s.stream_id), name: s.name || '' });
       map.set(s.epg_channel_id, list);
     }
-    if (ids.size) { streamsByEpgId = map; streamIds = ids; streamsLoadedAt = Date.now(); }
+    if (ids.size) { streamsByEpgId = map; streamIds = ids; eventStreams = events; streamsLoadedAt = Date.now(); }
     console.log(`Watch: loaded ${ids.size} live streams (${map.size} guide channels linked)`);
   } catch (e) {
     console.error('Watch: stream list failed:', (e.message || '').replace(/(username|password)=[^&\s]+/g, '$1=<redacted>'));
@@ -882,6 +917,41 @@ function regionRank(name) {
   return 2;
 }
 
+// Tennis broadcasts name the tournament, not the players ("ATP Masters 1000 Shanghai"),
+// so a tennis match is offered every channel showing its tournament now, plus the dated
+// event feeds for that day — the feed for the match's own court first.
+const TOURNAMENT_GENERIC = new Set(['rolex','masters','open','championships','championship','cup','presented','the',
+  'tennis','international','classic','trophy','atp','wta','tour','series','final','finals','grand','slam','mutua','national','bank']);
+function tournamentWords(name) {
+  return stripAccents((name || '').toLowerCase()).split(/[^a-z0-9]+/).filter(w => w.length >= 4 && !TOURNAMENT_GENERIC.has(w));
+}
+const TENNIS_RE = /tennis|\batp\b|\bwta\b/i;
+function addTennisChannels(fix, channels, seen) {
+  const words = tournamentWords(fix.tournament);
+  if (!words.length) return;
+  const mentions = text => { const { padded } = titleWords(text || ''); return words.some(w => hasWord(padded, w)); };
+  for (const ch of cache) {
+    const title = ch.now?.title || '';
+    if (!(mentions(title) && (TENNIS_RE.test(title) || TENNIS_RE.test(ch.name)))) continue;
+    const variants = ch.variantIds || [{ id: ch.id, quality: ch.quality }];
+    const streams = variants.flatMap(v => (streamsByEpgId.get(v.id) || []).map(s => ({ ...s, quality: v.quality })))
+      .filter(s => !seen.has(s.id) && seen.add(s.id));
+    if (streams.length) channels.push({ name: ch.name, logo: ch.logo || '', onNow: true, programme: title, streams });
+  }
+  const start = new Date(fix.espnStartTime);
+  const days = new Set([-1, 0, 1].map(d => new Date(start.getTime() + d * 864e5).toISOString().slice(0, 10)));
+  const court = stripAccents((fix.court || '').toLowerCase());
+  // Feed names carry a North American date; the match's own day there ranks first.
+  const matchDay = new Date(start.getTime() - 4 * 3600e3).toISOString().slice(0, 10);
+  for (const s of eventStreams) {
+    if (!days.has(s.date) || !TENNIS_RE.test(s.name) || !mentions(s.name) || seen.has(s.id)) continue;
+    seen.add(s.id);
+    const onCourt = (court && stripAccents(s.name.toLowerCase()).includes(court) ? 2 : 0) + (s.date === matchDay ? 1 : 0);
+    channels.push({ name: s.name, logo: '', onNow: fix.isLive, programme: fix.court ? `${fix.tournament} · ${fix.court}` : fix.tournament,
+      court: onCourt, streams: [{ id: s.id, name: s.name, quality: '' }] });
+  }
+}
+
 function watchStatus(fix) {
   if (fix.isLive) return 'live';
   if (fix.isFinished) return 'finished';
@@ -920,7 +990,8 @@ app.get('/api/watch/match', requireWatchKey, (req, res) => {
       programme: live ? ch.now.title : up.title, streams,
     });
   }
-  channels.sort((a, b) => b.onNow - a.onNow || regionRank(a.name) - regionRank(b.name) || a.name.localeCompare(b.name));
+  if (fix.sportId === 'tennis') addTennisChannels(fix, channels, seen);
+  channels.sort((a, b) => (b.court || 0) - (a.court || 0) || b.onNow - a.onNow || regionRank(a.name) - regionRank(b.name) || a.name.localeCompare(b.name));
   res.json({
     fixture: { name: fix.displayName, league: fix.league, start: fix.espnStartTime, isLive: fix.isLive, isFinished: fix.isFinished },
     status: watchStatus(fix),
