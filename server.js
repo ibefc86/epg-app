@@ -835,7 +835,6 @@ const WATCH_API_KEY = process.env.WATCH_API_KEY || '';
 const STREAMS_REFRESH_MS = 6 * 60 * 60 * 1000;
 let streamsByEpgId = new Map(); // XMLTV channel id -> [{ id, name }]
 let streamIds = new Set();
-let eventStreams = []; // one-off event feeds with a date in their name (no guide data)
 let streamsLoadedAt = 0;
 
 function xtream() {
@@ -855,18 +854,16 @@ async function loadStreams() {
     const res = await axios.get(`${x.base}/player_api.php`, {
       params: { username: x.username, password: x.password, action: 'get_live_streams' }, timeout: 60000,
     });
-    const map = new Map(), ids = new Set(), events = [];
+    const map = new Map(), ids = new Set();
     for (const s of Array.isArray(res.data) ? res.data : []) {
       if (!s.stream_id) continue;
       ids.add(String(s.stream_id));
-      const dm = String(s.name || '').match(/\((\d{4}-\d{2}-\d{2})[ T]\d{2}:\d{2}/);
-      if (dm) events.push({ id: String(s.stream_id), name: s.name, date: dm[1] });
       if (!s.epg_channel_id) continue;
       const list = map.get(s.epg_channel_id) || [];
       list.push({ id: String(s.stream_id), name: s.name || '' });
       map.set(s.epg_channel_id, list);
     }
-    if (ids.size) { streamsByEpgId = map; streamIds = ids; eventStreams = events; streamsLoadedAt = Date.now(); }
+    if (ids.size) { streamsByEpgId = map; streamIds = ids; streamsLoadedAt = Date.now(); }
     console.log(`Watch: loaded ${ids.size} live streams (${map.size} guide channels linked)`);
   } catch (e) {
     console.error('Watch: stream list failed:', (e.message || '').replace(/(username|password)=[^&\s]+/g, '$1=<redacted>'));
@@ -918,38 +915,59 @@ function regionRank(name) {
 }
 
 // Tennis broadcasts name the tournament, not the players ("ATP Masters 1000 Shanghai"),
-// so a tennis match is offered every channel showing its tournament now, plus the dated
-// event feeds for that day — the feed for the match's own court first.
+// so a tennis match is offered the channels whose current programme is its tournament —
+// the broadcaster picks which court it shows, so these are flagged as "may be another
+// match". (Dated per-court event feeds were tried and don't deliver — not offered.)
 const TOURNAMENT_GENERIC = new Set(['rolex','masters','open','championships','championship','cup','presented','the',
   'tennis','international','classic','trophy','atp','wta','tour','series','final','finals','grand','slam','mutua','national','bank']);
 function tournamentWords(name) {
   return stripAccents((name || '').toLowerCase()).split(/[^a-z0-9]+/).filter(w => w.length >= 4 && !TOURNAMENT_GENERIC.has(w));
 }
 const TENNIS_RE = /tennis|\batp\b|\bwta\b/i;
+const MAX_TENNIS_CHANNELS = 4;
+// English-language tennis coverage first (Australian, then the big English broadcasters),
+// foreign-language commentary last — judged by channel name and programme wording.
+const ENGLISH_TENNIS_RE = /tennis channel|sky sports|bein|\btsn\b|stan sport|eurosport|amazon|9gem|\bnine\b|espn(?!.*\b(arg|br|mx|latam)\b)/i;
+const FOREIGN_WORDS_RE = /\b(ronde|konferenz|jornada|primera|giornata|tag|runde|tour \d|journée|cuartos|octavos|huitièmes)\b/i;
+function tennisRank(c) {
+  if (FOREIGN_WORDS_RE.test(c.programme || '')) return 4;
+  const region = regionRank(c.name);
+  if (region === 0) return 0;
+  if (region === 2) return 3;
+  return ENGLISH_TENNIS_RE.test(c.name) ? 1 : 2;
+}
 function addTennisChannels(fix, channels, seen) {
   const words = tournamentWords(fix.tournament);
   if (!words.length) return;
   const mentions = text => { const { padded } = titleWords(text || ''); return words.some(w => hasWord(padded, w)); };
+  const found = [];
   for (const ch of cache) {
     const title = ch.now?.title || '';
     if (!(mentions(title) && (TENNIS_RE.test(title) || TENNIS_RE.test(ch.name)))) continue;
-    const variants = ch.variantIds || [{ id: ch.id, quality: ch.quality }];
-    const streams = variants.flatMap(v => (streamsByEpgId.get(v.id) || []).map(s => ({ ...s, quality: v.quality })))
-      .filter(s => !seen.has(s.id) && seen.add(s.id));
-    if (streams.length) channels.push({ name: ch.name, logo: ch.logo || '', onNow: true, programme: title, streams });
+    const streams = channelStreams(ch).filter(s => !seen.has(s.id));
+    if (streams.length) found.push({ name: ch.name, logo: ch.logo || '', onNow: true, programme: title, streams, tournamentOnly: true });
   }
-  const start = new Date(fix.espnStartTime);
-  const days = new Set([-1, 0, 1].map(d => new Date(start.getTime() + d * 864e5).toISOString().slice(0, 10)));
-  const court = stripAccents((fix.court || '').toLowerCase());
-  // Feed names carry a North American date; the match's own day there ranks first.
-  const matchDay = new Date(start.getTime() - 4 * 3600e3).toISOString().slice(0, 10);
-  for (const s of eventStreams) {
-    if (!days.has(s.date) || !TENNIS_RE.test(s.name) || !mentions(s.name) || seen.has(s.id)) continue;
-    seen.add(s.id);
-    const onCourt = (court && stripAccents(s.name.toLowerCase()).includes(court) ? 2 : 0) + (s.date === matchDay ? 1 : 0);
-    channels.push({ name: s.name, logo: '', onNow: fix.isLive, programme: fix.court ? `${fix.tournament} · ${fix.court}` : fix.tournament,
-      court: onCourt, streams: [{ id: s.id, name: s.name, quality: '' }] });
+  found.sort((a, b) => tennisRank(a) - tennisRank(b) || a.name.localeCompare(b.name));
+  let added = 0;
+  for (const c of found) {
+    if (added >= MAX_TENNIS_CHANNELS) break;
+    c.streams = c.streams.filter(s => !seen.has(s.id));
+    if (!c.streams.length) continue; // same feed as a channel already offered
+    c.streams.forEach(s => seen.add(s.id));
+    channels.push(c);
+    added++;
   }
+}
+
+// A channel's streams across its quality versions — best that a browser can play first
+// (FHD, HD, then 4K/HEVC which often won't), capped so the list stays usable.
+const MAX_STREAMS_PER_CHANNEL = 3;
+const QUALITY_ORDER = { FHD: 0, HD: 1, '': 2, SD: 3, '4K': 4 };
+function channelStreams(ch) {
+  const variants = ch.variantIds || [{ id: ch.id, quality: ch.quality }];
+  return variants.flatMap(v => (streamsByEpgId.get(v.id) || []).map(s => ({ ...s, quality: v.quality })))
+    .sort((a, b) => (QUALITY_ORDER[a.quality] ?? 2) - (QUALITY_ORDER[b.quality] ?? 2) || /hevc/i.test(a.name) - /hevc/i.test(b.name))
+    .slice(0, MAX_STREAMS_PER_CHANNEL);
 }
 
 function watchStatus(fix) {
@@ -981,9 +999,7 @@ app.get('/api/watch/match', requireWatchKey, (req, res) => {
     const live = ch.now?.sport?.fixtureKey === fix.fixtureKey || showingNow(ch);
     const up = (ch.upcoming || []).find(p => p.fixtureKey === fix.fixtureKey);
     if (!live && !up) continue;
-    const variants = ch.variantIds || [{ id: ch.id, quality: ch.quality }];
-    const streams = variants.flatMap(v => (streamsByEpgId.get(v.id) || []).map(s => ({ ...s, quality: v.quality })))
-      .filter(s => !seen.has(s.id) && seen.add(s.id));
+    const streams = channelStreams(ch).filter(s => !seen.has(s.id) && seen.add(s.id));
     if (!streams.length) { withoutStreams++; continue; }
     channels.push({
       name: ch.name, logo: ch.logo || '', onNow: live,
@@ -991,7 +1007,7 @@ app.get('/api/watch/match', requireWatchKey, (req, res) => {
     });
   }
   if (fix.sportId === 'tennis') addTennisChannels(fix, channels, seen);
-  channels.sort((a, b) => (b.court || 0) - (a.court || 0) || b.onNow - a.onNow || regionRank(a.name) - regionRank(b.name) || a.name.localeCompare(b.name));
+  channels.sort((a, b) => (a.tournamentOnly || 0) - (b.tournamentOnly || 0) || b.onNow - a.onNow || regionRank(a.name) - regionRank(b.name) || a.name.localeCompare(b.name));
   res.json({
     fixture: { name: fix.displayName, league: fix.league, start: fix.espnStartTime, isLive: fix.isLive, isFinished: fix.isFinished },
     status: watchStatus(fix),
