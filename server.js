@@ -970,6 +970,37 @@ function channelStreams(ch) {
     .slice(0, MAX_STREAMS_PER_CHANNEL);
 }
 
+// Racing: the guide lists racing channels by session ("Sky Racing 1 Late Night"), never by
+// race, so a race is offered the racing channels that cover its country — and flagged so.
+const RACING_CHANNELS = {
+  AU: ['SkyThoroughbredCentral.au', 'SKYRacing1.au', 'RACINGCOM.au', 'SKYRacing2.au'],
+  NZ: ['SKYRacing2.au', 'SKYRacing1.au'],
+  UK: ['RacingTV.uk', 'SKYRacing2.au', 'SKYRacing1.au'],
+  IRE: ['RacingTV.uk', 'SKYRacing2.au', 'SKYRacing1.au'],
+  other: ['SKYRacing2.au', 'SKYRacing1.au', 'SkyThoroughbredCentral.au'],
+};
+function racingWatch({ league, home, away, start }) {
+  const country = (league.split('/')[1] || '').toUpperCase();
+  const ids = RACING_CHANNELS[country === 'AUS' ? 'AU' : country] || RACING_CHANNELS.other;
+  const t = start ? new Date(start).getTime() : NaN;
+  const mins = isNaN(t) ? NaN : (t - Date.now()) / 60000;
+  const status = isNaN(mins) ? 'scheduled' : mins < -20 ? 'finished' : mins <= 10 ? 'live' : mins <= 30 ? 'soon' : 'scheduled';
+  const seen = new Set(), channels = [];
+  for (const id of ids) {
+    const ch = (cache || []).find(c => c.id === id || (c.variantIds || []).some(v => v.id === id));
+    const streams = channelStreams({ id, quality: '', variantIds: [{ id, quality: '' }] }).filter(s => !seen.has(s.id) && seen.add(s.id));
+    if (!streams.length) continue;
+    channels.push({ name: ch?.name || streams[0].name, logo: ch?.logo || '', onNow: true, programme: ch?.now?.title || 'Racing', streams, tournamentOnly: true });
+  }
+  return {
+    fixture: { name: [away, home].filter(Boolean).join(' · ') || 'Race', league, start: start || null, isLive: status === 'live', isFinished: status === 'finished' },
+    status: status === 'finished' ? 'finished' : status,
+    channels: status === 'finished' ? [] : channels,
+    note: 'Racing channel — your race may be on another of these channels.',
+    reason: channels.length ? null : 'no_channel',
+  };
+}
+
 function watchStatus(fix) {
   if (fix.isLive) return 'live';
   if (fix.isFinished) return 'finished';
@@ -980,6 +1011,7 @@ function watchStatus(fix) {
 app.get('/api/watch/match', requireWatchKey, (req, res) => {
   const q = { league: String(req.query.league || ''), home: String(req.query.home || ''), away: String(req.query.away || ''), start: req.query.start };
   if (!cache) return res.status(503).json({ error: 'Guide still loading' });
+  if (q.league.startsWith('racing/')) return res.json(racingWatch(q));
   const fix = findWatchFixture(q);
   if (!fix) return res.json({ fixture: null, status: null, channels: [], reason: 'no_fixture' });
 
@@ -1012,6 +1044,7 @@ app.get('/api/watch/match', requireWatchKey, (req, res) => {
     fixture: { name: fix.displayName, league: fix.league, start: fix.espnStartTime, isLive: fix.isLive, isFinished: fix.isFinished },
     status: watchStatus(fix),
     channels,
+    note: fix.sportId === 'tennis' && channels.some(c => c.tournamentOnly) ? 'Showing the tournament — the broadcaster may be on another court.' : null,
     reason: channels.length ? null : (withoutStreams ? 'no_stream' : 'no_channel'),
   });
 });
