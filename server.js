@@ -434,12 +434,9 @@ function tooFarApart(fix, progStart) {
 // Prelims"): a programme is the card if it says UFC, names a fighter on it or says what part
 // of the night it is, and starts between 2h before the first prelim and 8h after.
 // Replays ("UFC 126: Silva vs Belfort") are another event's number or another fight's names.
-const FIGHT_CARD_RE = /fight night|prelim|main card/i;
-function fightCardMatch(fix, title, desc, progStart) {
-  if (!fix.fighters?.length || !fix.espnStartTime || !progStart) return false;
+const FIGHT_CARD_RE = /fight night|\bfn\b|prelim|main card/i;
+function cardTextMatch(fix, title, desc) {
   if (!/\bufc\b/i.test(title)) return false;
-  const gap = progStart - new Date(fix.espnStartTime);
-  if (gap < -2 * 3600e3 || gap > 8 * 3600e3) return false;
   const num = title.match(/\bufc (\d{3})\b/i);
   if (num && !fix.name.includes(`ufc ${num[1]}`)) return false;
   const surnames = fix.fighters.map(n => stripAccents(n.split(' ').pop())).filter(w => w.length >= 4);
@@ -448,6 +445,31 @@ function fightCardMatch(fix, title, desc, progStart) {
   if (pair && !surnames.includes(pair[1]) && !surnames.includes(pair[2])) return false;
   const { padded } = titleWords(`x: ${title} ${desc || ''}`);
   return FIGHT_CARD_RE.test(title) || surnames.some(w => hasWord(padded, w));
+}
+function fightCardMatch(fix, title, desc, progStart) {
+  if (!fix.fighters?.length || !fix.espnStartTime || !progStart) return false;
+  const gap = progStart - new Date(fix.espnStartTime);
+  if (gap < -2 * 3600e3 || gap > 8 * 3600e3) return false;
+  return cardTextMatch(fix, title, desc);
+}
+
+// The provider's PPV and Fight Pass streams are named for tonight's event and mostly have no
+// guide listing: "EVENT 01: PRELIMS UFC FN (10.31 5:00 PM ET)". Its date, when given, is US Eastern.
+const NOT_THE_FIGHTS_RE = /press conference|weigh.?in|countdown|embedded|no event|portugu[eê]s|espa[nñ]ol/i;
+// Best first: Paramount+ (UFC's US broadcaster, English), the PPV event slots, the other
+// rights-holders' feeds, then multiview and anything else.
+const EVENT_STREAM_RANKS = [/multiview/i, /paramount/i, /^(live )?event \d/i, /sportsnet|max uk|tnt/i];
+const eventStreamRank = name => [3, 0, 1, 2].find((r, i) => EVENT_STREAM_RANKS[i].test(name)) ?? 4;
+const MAX_EVENT_STREAMS = 8;
+function eventStreamMatch(fix, name) {
+  if (!fix.fighters?.length || !fix.espnStartTime || NOT_THE_FIGHTS_RE.test(name)) return false;
+  const d = name.match(/\((\d{1,2})\.(\d{1,2})\b/);
+  if (d) {
+    const et = new Date(new Date(fix.espnStartTime).toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const named = new Date(et.getFullYear(), +d[1] - 1, +d[2]);
+    if (Math.abs(named - new Date(et.getFullYear(), et.getMonth(), et.getDate())) > 86400e3) return false;
+  }
+  return cardTextMatch(fix, name);
 }
 
 function matchFixtureStrict(title, progStart, desc) {
@@ -863,6 +885,7 @@ const WATCH_API_KEY = process.env.WATCH_API_KEY || '';
 const STREAMS_REFRESH_MS = 6 * 60 * 60 * 1000;
 let streamsByEpgId = new Map(); // XMLTV channel id -> [{ id, name }]
 let streamIds = new Set();
+let ufcStreams = []; // [{ id, name }] for streams named after a UFC event, guide listing or not
 let streamsLoadedAt = 0;
 
 function xtream() {
@@ -882,16 +905,17 @@ async function loadStreams() {
     const res = await axios.get(`${x.base}/player_api.php`, {
       params: { username: x.username, password: x.password, action: 'get_live_streams' }, timeout: 60000,
     });
-    const map = new Map(), ids = new Set();
+    const map = new Map(), ids = new Set(), ufc = [];
     for (const s of Array.isArray(res.data) ? res.data : []) {
       if (!s.stream_id) continue;
       ids.add(String(s.stream_id));
+      if (/\bufc\b/i.test(s.name || '')) ufc.push({ id: String(s.stream_id), name: s.name });
       if (!s.epg_channel_id) continue;
       const list = map.get(s.epg_channel_id) || [];
       list.push({ id: String(s.stream_id), name: s.name || '' });
       map.set(s.epg_channel_id, list);
     }
-    if (ids.size) { streamsByEpgId = map; streamIds = ids; streamsLoadedAt = Date.now(); }
+    if (ids.size) { streamsByEpgId = map; streamIds = ids; ufcStreams = ufc; streamsLoadedAt = Date.now(); }
     console.log(`Watch: loaded ${ids.size} live streams (${map.size} guide channels linked)`);
   } catch (e) {
     console.error('Watch: stream list failed:', (e.message || '').replace(/(username|password)=[^&\s]+/g, '$1=<redacted>'));
@@ -1070,9 +1094,19 @@ app.get('/api/watch/match', requireWatchKey, (req, res) => {
     });
   }
   if (fix.sportId === 'tennis') addTennisChannels(fix, channels, seen);
-  // A channel named after the event (the provider's own "EVENT 03: UFC FN …" feeds) first.
-  const named = c => fix.fighters?.length && /\bufc\b/i.test(c.name) ? 1 : 0;
-  channels.sort((a, b) => (a.tournamentOnly || 0) - (b.tournamentOnly || 0) || named(b) - named(a) || b.onNow - a.onNow || regionRank(a.name) - regionRank(b.name) || a.name.localeCompare(b.name));
+  if (fix.fighters?.length && !fix.isFinished) {
+    const named = channels.filter(c => /\bufc\b/i.test(c.name)).length;
+    const found = ufcStreams.filter(st => !seen.has(st.id) && eventStreamMatch(fix, st.name))
+      .sort((a, b) => eventStreamRank(a.name) - eventStreamRank(b.name) || a.name.localeCompare(b.name))
+      .slice(0, Math.max(0, MAX_EVENT_STREAMS - named));
+    for (const st of found) {
+      seen.add(st.id);
+      channels.push({ name: st.name, logo: '', onNow: !!fix.isLive, programme: st.name, streams: [{ ...st, quality: '' }] });
+    }
+  }
+  // Channels named after the event (Paramount+, the provider's "EVENT 03: UFC FN …" slots) first.
+  const named = c => fix.fighters?.length && /\bufc\b/i.test(c.name) ? eventStreamRank(c.name) : 9;
+  channels.sort((a, b) => (a.tournamentOnly || 0) - (b.tournamentOnly || 0) || named(a) - named(b) || b.onNow - a.onNow || regionRank(a.name) - regionRank(b.name) || a.name.localeCompare(b.name));
   res.json({
     fixture: { name: fix.displayName, league: fix.league, start: fix.espnStartTime, isLive: fix.isLive, isFinished: fix.isFinished },
     status: watchStatus(fix),
