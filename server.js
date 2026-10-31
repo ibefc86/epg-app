@@ -326,6 +326,11 @@ async function fetchESPNFixtures(full = false) {
         isFinished: state === 'post',
         fixtureKey: (home && away) ? `${home.toLowerCase()}__${away.toLowerCase()}` : `tournament__${event.id}`,
         espnStartTime: event.competitions?.[0]?.date || null,
+        // A UFC card is one event of many fights, named after its main event only:
+        // every fighter on it, so a tip on any fight finds the card.
+        fighters: sportId === 'boxing'
+          ? (event.competitions || []).flatMap(c => (c.competitors || []).map(x => (x.athlete?.displayName || '').toLowerCase())).filter(Boolean)
+          : undefined,
       });
     }
   }
@@ -883,7 +888,7 @@ function requireWatchKey(req, res, next) {
 // (accents, nicknames, distinctive words) in both directions against "Home v Away".
 function fixtureHasTeam(fix, name) {
   if (!name) return true;
-  const { padded } = titleWords(`${fix.home} v ${fix.away} ${fix.homeShort} ${fix.awayShort}`);
+  const { padded } = titleWords(`${fix.home} v ${fix.away} ${fix.homeShort} ${fix.awayShort} ${(fix.fighters || []).join(' v ')}`);
   if (teamMentioned(padded, name.toLowerCase())) return true;
   const { padded: q } = titleWords(name);
   return teamMentioned(q, fix.home) || teamMentioned(q, fix.away);
@@ -896,7 +901,9 @@ function findWatchFixture({ league, home, away, start }) {
   const hits = fixtureCache.filter(f => {
     if (league && f.league && f.league !== league) return false;
     if (!league && names.length < 2) return false; // one team and no league is too loose
-    if (!isNaN(t) && f.espnStartTime && Math.abs(new Date(f.espnStartTime).getTime() - t) > 3 * 60 * 60 * 1000) return false;
+    // A fight card starts with its first prelim: the main event is hours later.
+    const after = f.fighters?.length ? 10 : 3;
+    if (!isNaN(t) && f.espnStartTime && (t - new Date(f.espnStartTime).getTime() > after * 3600e3 || new Date(f.espnStartTime).getTime() - t > 3 * 3600e3)) return false;
     return names.every(n => fixtureHasTeam(f, n));
   });
   hits.sort((a, b) => (b.isLive - a.isLive)
