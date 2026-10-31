@@ -430,10 +430,31 @@ function tooFarApart(fix, progStart) {
   return progStart && fix.espnStartTime && Math.abs(new Date(fix.espnStartTime) - progStart) > 12 * 60 * 60 * 1000;
 }
 
-function matchFixtureStrict(title, progStart) {
+// A UFC broadcast is titled after the event, and often names no fighter ("UFC Fight Night:
+// Prelims"): a programme is the card if it says UFC, names a fighter on it or says what part
+// of the night it is, and starts between 2h before the first prelim and 8h after.
+// Replays ("UFC 126: Silva vs Belfort") are another event's number or another fight's names.
+const FIGHT_CARD_RE = /fight night|prelim|main card/i;
+function fightCardMatch(fix, title, desc, progStart) {
+  if (!fix.fighters?.length || !fix.espnStartTime || !progStart) return false;
+  if (!/\bufc\b/i.test(title)) return false;
+  const gap = progStart - new Date(fix.espnStartTime);
+  if (gap < -2 * 3600e3 || gap > 8 * 3600e3) return false;
+  const num = title.match(/\bufc (\d{3})\b/i);
+  if (num && !fix.name.includes(`ufc ${num[1]}`)) return false;
+  const surnames = fix.fighters.map(n => stripAccents(n.split(' ').pop())).filter(w => w.length >= 4);
+  const { padded: inTitle } = titleWords(`x: ${title}`);
+  const pair = inTitle.match(/ ([a-z]{4,}) (?:vs?|c) ([a-z]{4,}) /);
+  if (pair && !surnames.includes(pair[1]) && !surnames.includes(pair[2])) return false;
+  const { padded } = titleWords(`x: ${title} ${desc || ''}`);
+  return FIGHT_CARD_RE.test(title) || surnames.some(w => hasWord(padded, w));
+}
+
+function matchFixtureStrict(title, progStart, desc) {
   if (!title) return null;
   const { t, padded } = titleWords(title);
   for (const fix of fixtureCache) {
+    if (fightCardMatch(fix, title, desc, progStart)) return fix;
     if (tooFarApart(fix, progStart)) continue;
     if (fix.name && fix.name.length > 5 && t.includes(fix.name.slice(0, 20))) return fix;
     if (fix.home && fix.away && teamsMatch(padded, fix.home, fix.away)) return fix;
@@ -441,11 +462,12 @@ function matchFixtureStrict(title, progStart) {
   return null;
 }
 
-function matchFixture(title, progStart) {
+function matchFixture(title, progStart, desc) {
   if (!title) return null;
   const { t, padded } = titleWords(title);
 
   for (const fix of fixtureCache) {
+    if (fightCardMatch(fix, title, desc, progStart)) return fix;
     if (tooFarApart(fix, progStart)) continue;
     if (fix.name && fix.name.length > 5 && t.includes(fix.name.slice(0, 20))) return fix;
     // Loose word matching on the event name — only for events without two teams
@@ -505,9 +527,9 @@ function keywordSport(title) {
   return null;
 }
 
-function classifyProgramme(title, progStart) {
+function classifyProgramme(title, progStart, desc) {
   if (!title || isNonLive(title)) return null;
-  const fix = matchFixture(title, progStart);
+  const fix = matchFixture(title, progStart, desc);
   if (fix) return {
     sportId: fix.sportId,
     emoji: fix.emoji,
@@ -531,7 +553,7 @@ function buildChannelData(ch, progs, now) {
   const in24h = new Date(now.getTime() + 24*60*60*1000);
   const next = sorted.filter(p => p.start > now && p.start < in24h).slice(0, 2);
   const upcoming = sorted.filter(p => p.start > now && p.start < in24h);
-  const classified = nowP ? classifyProgramme(nowP.title, nowP.start) : null;
+  const classified = nowP ? classifyProgramme(nowP.title, nowP.start, nowP.desc) : null;
   return {
     ...ch,
     now: nowP ? {
@@ -541,8 +563,9 @@ function buildChannelData(ch, progs, now) {
     } : null,
     next: next.filter(p => !isNonLive(p.title)).map(p => ({ title: p.title, desc: p.desc.slice(0, 100), startRaw: p.startRaw })),
     upcoming: upcoming.filter(p => !isNonLive(p.title)).map(p => {
-      const fix = matchFixtureStrict(p.title, p.start);
-      if (fix && fix.isUpcoming) {
+      const fix = matchFixtureStrict(p.title, p.start, p.desc);
+      // A card already under way still has later coverage to come (the main card).
+      if (fix && (fix.isUpcoming || (fix.isLive && fix.fighters?.length))) {
         const sport = { sportId: fix.sportId, emoji: fix.emoji, isLive: false, fixtureKey: fix.fixtureKey, displayName: fix.displayName, homeLogo: fix.homeLogo, awayLogo: fix.awayLogo, homeColor: fix.homeColor || null, awayColor: fix.awayColor || null, espnDesc: fix.espnDesc || null };
         return { title: p.title, desc: p.desc.slice(0, 100), startRaw: p.startRaw, sport, fixtureKey: sport.fixtureKey, displayName: sport.displayName, espnStartTime: fix.espnStartTime || null };
       }
@@ -1030,9 +1053,10 @@ app.get('/api/watch/match', requireWatchKey, (req, res) => {
   // title against this fixture right now. Cheap word check first, full match second.
   const showingNow = (ch) => {
     if (!ch.now?.title) return false;
+    if (fightCardMatch(fix, ch.now.title, ch.now.desc, parseDate(ch.now.startRaw))) return true;
     const { padded } = titleWords(ch.now.title);
     if (!teamMentioned(padded, fix.home || fix.name) && !teamMentioned(padded, fix.away || '')) return false;
-    return matchFixture(ch.now.title, parseDate(ch.now.startRaw))?.fixtureKey === fix.fixtureKey;
+    return matchFixture(ch.now.title, parseDate(ch.now.startRaw), ch.now.desc)?.fixtureKey === fix.fixtureKey;
   };
   for (const ch of cache) {
     const live = ch.now?.sport?.fixtureKey === fix.fixtureKey || showingNow(ch);
@@ -1046,7 +1070,9 @@ app.get('/api/watch/match', requireWatchKey, (req, res) => {
     });
   }
   if (fix.sportId === 'tennis') addTennisChannels(fix, channels, seen);
-  channels.sort((a, b) => (a.tournamentOnly || 0) - (b.tournamentOnly || 0) || b.onNow - a.onNow || regionRank(a.name) - regionRank(b.name) || a.name.localeCompare(b.name));
+  // A channel named after the event (the provider's own "EVENT 03: UFC FN …" feeds) first.
+  const named = c => fix.fighters?.length && /\bufc\b/i.test(c.name) ? 1 : 0;
+  channels.sort((a, b) => (a.tournamentOnly || 0) - (b.tournamentOnly || 0) || named(b) - named(a) || b.onNow - a.onNow || regionRank(a.name) - regionRank(b.name) || a.name.localeCompare(b.name));
   res.json({
     fixture: { name: fix.displayName, league: fix.league, start: fix.espnStartTime, isLive: fix.isLive, isFinished: fix.isFinished },
     status: watchStatus(fix),
